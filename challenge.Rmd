@@ -1,0 +1,98 @@
+---
+title: "challenge"
+output: html_document
+date: "2025-03-05"
+---
+
+```{r}
+library(haven)
+library(tidyverse)
+survey <- read_dta("ZA7575.dta")
+```
+
+Seleccionamos las variables que hemos seleccionado previamente:
+
+d70, sd1, sd2, sd3,qc1, qc2, qc3, qc4, qc5, qc6,qc7,qc8,qc9,qc10,qc11, qc12,qc13, qc14, qc15, qc16, qc17,qc18, qc19, qc20, d1, d7, d10, d8, d15a, d25
+
+
+```{r}
+survey <- survey |> 
+  select(c(country, isocntry, q1_1, q1_2, q1_3, q1_4, q1_5, q1_6, q1_7, q1_8, q1_9, q1_9, q1_10, q1_11, q1_12, q1_13, q1_14, q1_15, q1_16, q1_17, q1_18, q1_19, q1_20, q1_21, q1_22, q1_23, q1_24, q1_25, q1_26, q1_27, q1_28, q1_29, q1_30, d11, d70, sd1_1, sd1_2, sd1_3, sd1_4, sd1_5, sd1_6, sd1_7, sd1_8, sd2_1, sd2_2, sd2_3, sd2_4, sd2_5, sd2_6, sd2_7, sd2_8, sd2_9, sd2_10, sd3, qc1_1, qc1_2, qc1_3, qc1_4, qc1_5, qc1_6, qc1_7, qc1_8, qc1_9, qc1_10, qc2_1, qc2_2, qc2_3, qc2_4, qc2_5, qc2_6, qc2_7, qc2_8, qc2_9, qc2_10, qc2_11, qc2_12, qc2_13, qc2_14, qc2_15, qc2_16, qc3, qc4_1, qc4_2, qc4_4, qc4_3, qc4_5, qc4_6, qc4_7, qc4_8, qc4_9, qc4_10, qc4_11, qc4_12, qc4_13, qc4_14, qc4_15, qc4_16, qc4_17, qc4_18, qc5_1, qc5_2, qc5_3, qc5_4, qc6_1, qc6_2, qc6_3, qc6_4, qc6_5, qc6_6, qc6_7, qc6_8, qc6_9, qc6_10, qc6_11, qc7, qc9_1, qc9_2, qc9_3, qc9_4, qc9_5, qc9_6, qc9_7, qc9_8, qc9_9, qc9_10, qc9_11, qc10,  qc12_1, qc12_2, qc12_3, qc12_4, qc12_5, qc12_6, qc12_7, qc12_8, qc12_9, qc12_10, qc12_11, qc12_12, qc12_13, qc12_13, qc12_14, qc12_15, qc13_1, qc13_2, qc13_3, qc13_4, qc13_5, qc13_6, qc13_7, qc13_8, qc13_9, qc13_10, qc13_11, qc13_14, qc13_15, qc14, qc15_1, qc15_2, qc15_3, qc17_1, qc17_2, qc17_3, qc17_4, qc17_5, qc17_6, qc17_7, qc18_1, qc18_2, qc18_3, qc19, qc20, d1, d7, d10, d8, d25, p4))
+```
+
+Mi primera propuesta de filtrado: 
+
+```{r}
+filtered_survey <- survey |>  
+  select(c(serialid, country, isocntry, sd1_1, sd1_4, sd1_7, sd1_8, d1, d7, d10, d11, d70, d8, d15a, d25, p4, qa17, sd2_5, sd3, qc19, qc20, qc18_1, qc18_2, qc18_3))
+```
+
+recodificamos la variable mas importante qc19, para que  no 0 si 1 y codificamos correctamente los NA: 
+
+```{r}
+filtered_survey <- filtered_survey |> 
+  mutate(qc19 = case_when(
+(qc19==1) ~ 1,
+(qc19==2) ~ 0,
+(qc19==3) ~ NA)) 
+
+```
+
+transformamos el resto de NA de las variables:
+
+```{r}
+filtered_survey <- filtered_survey |> 
+  mutate(sd1_4 = if_else(sd1_4 == 4, NA, sd1_4)) 
+
+filtered_survey <- filtered_survey |> 
+  mutate(sd1_7 = if_else(sd1_7 == 4, NA, sd1_7)) 
+
+filtered_survey <- filtered_survey |> 
+  mutate(sd1_8 = if_else(sd1_8 == 4, NA, sd1_8)) 
+
+filtered_survey <- filtered_survey |> 
+  mutate(d1 = if_else(d1 == 11 | d1 == 12, NA, d1)) 
+
+filtered_survey <- filtered_survey |> 
+  mutate(d7 = if_else(d7 == 15 | d7 == 16, NA, d7))
+
+filtered_survey <- filtered_survey |> 
+  mutate(d11 = if_else(d11 == 99 , NA, d11))
+
+filtered_survey <- filtered_survey |> 
+  mutate(d70 = if_else(d70 == 5, NA, d70))
+
+filtered_survey <- filtered_survey |> 
+  mutate(d8 = if_else(d8 == 00 | d8 == 01 | d8 == 98 | d8 == 99, NA, as.numeric(d8)))
+
+filtered_survey <- filtered_survey |> 
+  mutate(d25 = if_else(d25 == 4, NA, d25))
+
+filtered_survey <- filtered_survey |> 
+  mutate(qa17 = if_else(qa17 == 5, NA, qa17))
+
+filtered_survey <- filtered_survey |> 
+  mutate(sd1_1 = if_else(sd1_1 == 5, NA, sd1_1))
+
+filtered_survey <- filtered_survey |> 
+  mutate(sd2_5 = if_else(sd2_5 == 9 |sd2_5 == 10,  NA, sd2_5))
+
+filtered_survey <- filtered_survey |> 
+  mutate(sd3 = if_else(sd3 == 14 | sd3 == 15 | sd3 == 16,  NA, sd3))
+
+filtered_survey <- filtered_survey |> 
+  mutate(qc20 = if_else(qc20 == 3,  NA, qc20))
+
+filtered_survey <- filtered_survey |> 
+  mutate(qc18_1 = if_else(qc18_1 == 11 | qc18_1 == 12,  NA, qc18_1))
+
+filtered_survey <- filtered_survey |> 
+  mutate(qc18_2 = if_else(qc18_2 == 11 | qc18_2 == 12,  NA, qc18_1))
+
+filtered_survey <- filtered_survey |> 
+  mutate(qc18_3 = if_else(qc18_3 == 11 | qc18_3 == 12,  NA, qc18_1))
+
+
+```
+
+
