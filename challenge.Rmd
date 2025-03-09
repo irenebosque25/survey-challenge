@@ -11,6 +11,7 @@ library(readxl)
 
 survey <- read_dta("data/ZA7575.dta")
 economic_indicators <- read_xlsx("data/country_data.xlsx")
+religiosity <- read_dta("data/replication_data.dta")
 
 economic_indicators <- economic_indicators |> 
   drop_na(`Series Code`) 
@@ -29,7 +30,23 @@ economic_indicators <- economic_indicators |>
 economic_indicators <- economic_indicators |> 
   pivot_wider(names_from = `Series Name`, values_from = latest_value )
 
+economic_indicators <- economic_indicators |> 
+  rename("country" = "Country Name", 
+         "gini" = "Gini index",
+         "gdp_pc" = "GDP per capita (constant 2015 US$)")
+
 ```
+
+```{r}
+religiosity <- religiosity |> 
+  group_by(country_name) |> 
+  slice_max(year) |> 
+  ungroup()
+
+religiosity <- religiosity |> 
+  select(religiosity_percent, country_name, e_regionpol)
+```
+
 
 Seleccionamos las variables que hemos seleccionado previamente:
 
@@ -37,7 +54,7 @@ d70, sd1, sd2, sd3,qc1, qc2, qc3, qc4, qc5, qc6,qc7,qc8,qc9,qc10,qc11, qc12,qc13
 
 
 ```{r}
-survey <- survey |> 
+first <- survey |> 
   select(c(country, isocntry, q1_1, q1_2, q1_3, q1_4, q1_5, q1_6, q1_7, q1_8, q1_9, q1_9, q1_10, q1_11, q1_12, q1_13, q1_14, q1_15, q1_16, q1_17, q1_18, q1_19, q1_20, q1_21, q1_22, q1_23, q1_24, q1_25, q1_26, q1_27, q1_28, q1_29, q1_30, d11, d70, sd1_1, sd1_2, sd1_3, sd1_4, sd1_5, sd1_6, sd1_7, sd1_8, sd2_1, sd2_2, sd2_3, sd2_4, sd2_5, sd2_6, sd2_7, sd2_8, sd2_9, sd2_10, sd3, qc1_1, qc1_2, qc1_3, qc1_4, qc1_5, qc1_6, qc1_7, qc1_8, qc1_9, qc1_10, qc2_1, qc2_2, qc2_3, qc2_4, qc2_5, qc2_6, qc2_7, qc2_8, qc2_9, qc2_10, qc2_11, qc2_12, qc2_13, qc2_14, qc2_15, qc2_16, qc3, qc4_1, qc4_2, qc4_4, qc4_3, qc4_5, qc4_6, qc4_7, qc4_8, qc4_9, qc4_10, qc4_11, qc4_12, qc4_13, qc4_14, qc4_15, qc4_16, qc4_17, qc4_18, qc5_1, qc5_2, qc5_3, qc5_4, qc6_1, qc6_2, qc6_3, qc6_4, qc6_5, qc6_6, qc6_7, qc6_8, qc6_9, qc6_10, qc6_11, qc7, qc9_1, qc9_2, qc9_3, qc9_4, qc9_5, qc9_6, qc9_7, qc9_8, qc9_9, qc9_10, qc9_11, qc10,  qc12_1, qc12_2, qc12_3, qc12_4, qc12_5, qc12_6, qc12_7, qc12_8, qc12_9, qc12_10, qc12_11, qc12_12, qc12_13, qc12_13, qc12_14, qc12_15, qc13_1, qc13_2, qc13_3, qc13_4, qc13_5, qc13_6, qc13_7, qc13_8, qc13_9, qc13_10, qc13_11, qc13_14, qc13_15, qc14, qc15_1, qc15_2, qc15_3, qc17_1, qc17_2, qc17_3, qc17_4, qc17_5, qc17_6, qc17_7, qc18_1, qc18_2, qc18_3, qc19, qc20, d1, d7, d10, d8, d25, p4))
 ```
 
