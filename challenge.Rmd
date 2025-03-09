@@ -8,6 +8,8 @@ date: "2025-03-05"
 library(haven)
 library(tidyverse)
 library(readxl)
+library(countries)
+library(countrycode)
 
 survey <- read_dta("data/ZA7575.dta")
 economic_indicators <- read_xlsx("data/country_data.xlsx")
@@ -21,7 +23,10 @@ economic_indicators <- economic_indicators %>%
   mutate(across(everything(), ~ if_else(.x == "", NA, .x)))
 
 economic_indicators <- economic_indicators %>%
-  mutate(latest_value = coalesce(`2023 [YR2023]`, `2022 [YR2022]`, `2021 [YR2021]`, `2020 [YR2020]`)) |> 
+  mutate(latest_value = coalesce(`2023 [YR2023]`, 
+                                 `2022 [YR2022]`, 
+                                 `2021 [YR2021]`, 
+                                 `2020 [YR2020]`)) |> 
   mutate(latest_value = as.numeric(latest_value))
 
 economic_indicators <- economic_indicators |> 
@@ -34,6 +39,12 @@ economic_indicators <- economic_indicators |>
   rename("country" = "Country Name", 
          "gini" = "Gini index",
          "gdp_pc" = "GDP per capita (constant 2015 US$)")
+
+economic_indicators <- economic_indicators |> 
+  mutate(country = country_name(country, to = "simple", 
+                                verbose = TRUE),
+         country_iso = countrycode::countrycode(country, origin = "country.name",
+                                            destination = "iso2c"))
 
 ```
 
