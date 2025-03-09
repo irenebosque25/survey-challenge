@@ -182,6 +182,14 @@ filtered_survey <- filtered_survey %>%
     TRUE ~ NA
   ))
 
+# Country names: DE-E and DE-W were problems 
+
+filtered_survey <- filtered_survey %>% 
+  mutate(country = country_name(isocntry, to = "simple", 
+                                verbose = TRUE, poor_matches = TRUE),
+         isocntry = countrycode::countrycode(country, origin = "country.name",
+                                                destination = "iso2c"))
+  
 individual_data <- filtered_survey |> 
   select(caseid, isocntry, trans_name, female, age, religion, 
          marital_status, personal_satis, ideology, 
