@@ -6,6 +6,7 @@ library(countries)
 library(countrycode)
 library(janitor)
 library(lme4)
+library(car)
 
 # Religiosity-----------------------------------------------
 religiosity <- read_dta("data/replication_data.dta")
@@ -80,7 +81,7 @@ trans <- trans |>
   select(country_iso, self_determination)
 
 # Rainbow score---------------------------------------------
-rainbow <- read_csv("data/rainbow.csv", )
+rainbow <- read_csv("data/rainbow.csv")
 
 rainbow <- rainbow |> 
   row_to_names(row_number = 1) |> 
@@ -105,7 +106,7 @@ survey <- read_dta("data/ZA7575.dta")
 survey <- survey |> 
   select(caseid, isocntry, d10, d11, 
          d1, sd3, d7, sd1_4, sd1_7, sd1_8, d70,
-         d63, qc19)
+         d63, qc19, d15a)
 
 # Recode dependent variable 
 filtered_survey <- survey |> 
@@ -125,6 +126,18 @@ filtered_survey <- filtered_survey |>
 # Recode age
 filtered_survey <- filtered_survey |> 
   mutate(age = if_else(d11 == 99 , NA, d11))
+
+# Current occupation
+
+filtered_survey <- filtered_survey |> 
+  mutate(occupation = case_when(
+    d15a %in% c(1, 3) ~ "Unemployed",
+    d15a == 2 ~ "Student",
+    d15a == 4 ~ "Retired",
+    d15a <= 9 ~ "Self employed",
+    d15a <=  14 ~ "Employed" ,
+    TRUE ~ NA), 
+    occupation = factor(occupation))
 
 # Recode religion 
 filtered_survey <- filtered_survey |> 
@@ -170,15 +183,16 @@ filtered_survey <- filtered_survey %>%
     sd1_4 == 1 | sd1_7 == 1 | sd1_8 == 1 ~ "Contact", # There is contact
     sd1_4 == 2 | sd1_7 == 2 | sd1_8 == 2 ~ "No contact", # There is not contact
     TRUE ~ NA
-  ))
+  ),
+  contact_lgbti = factor(contact_lgbti))
 
 # Autoperception of the social class
 
 filtered_survey <- filtered_survey %>% 
   mutate(social_class = case_when(
-    d63 == 1 ~ "Working class", 
-    d63 %in% c(2, 3, 4) ~ "Middle class", 
-    d63 == 5 ~ "High class", 
+    d63 %in% c(1, 2) ~ "Working class", 
+    d63 == 3 ~ "Middle class", 
+    d63 %in% c(4, 5) ~ "High class", 
     TRUE ~ NA
   ))
 
@@ -193,7 +207,7 @@ filtered_survey <- filtered_survey %>%
 individual_data <- filtered_survey |> 
   select(caseid, isocntry, trans_name, female, age, religion, 
          marital_status, personal_satis, ideology, 
-         contact_lgbti, social_class)
+         contact_lgbti, social_class, occupation)
 
 # Merge-----------------------------------------------------
 
@@ -206,17 +220,25 @@ final_data <- individual_data |>
 
 # Models----------------------------------------------------
 
+final_data$contact_lgbti <- relevel(final_data$contact_lgbti, ref = "No contact")
+
 model <- glm(trans_name ~ age + 
                female + 
                religion + 
+               occupation + 
                marital_status + 
                personal_satis +
                contact_lgbti +
                ideology +
                social_class, 
-             family = "binomial", data = filtered_survey)
+             family = "binomial", data = final_data)
 
 summary(model)
+
+exp(coef(model))
+
+vif(model) # We do not have multicollinearity between the individual variables 
+
 
 # We are going to scale the variables because we are having troubles with the
 # identifiability of the model 
@@ -224,9 +246,11 @@ final_data <- final_data  |>
   mutate(across(where(is.numeric) & !(starts_with("case") |
                                         starts_with("trans") ), scale))
 
-model2 <- glmer(trans_name ~ age + 
+model2 <- glmer(trans_name ~ 
+                  age + 
                   female + 
-                  religion + 
+                  religion +
+                  occupation +
                   marital_status + 
                   personal_satis +
                   contact_lgbti +
@@ -238,4 +262,124 @@ model2 <- glmer(trans_name ~ age +
 summary(model2)
 
 
+model3 <- glmer(trans_name ~ 
+                  age + 
+                  I(age^2) +
+                  female + 
+                  occupation +
+                  religion*religiosity_percent + 
+                  marital_status*religiosity_percent + 
+                  personal_satis*self_determination +
+                  contact_lgbti*rain_ind +
+                  contact_lgbti*self_determination +
+                  ideology*gdp_pc +
+                  social_class*gini +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model3)
 
+# Not significant: Age, self_determination by itself, gdp_pc by itself,
+# religiosity by itself, interaction between religiosity and marital status,
+# AIC = 21167
+
+model4 <- glmer(trans_name ~ 
+                  age + 
+                  I(age^2) + 
+                  female + 
+                  religion +
+                  occupation + 
+                  religion:religiosity_percent + 
+                  marital_status + 
+                  personal_satis + 
+                  personal_satis:self_determination +
+                  contact_lgbti*rain_ind +
+                  contact_lgbti:self_determination +
+                  ideology +
+                  ideology:gdp_pc +
+                  social_class*gini +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model4)
+
+# Not significant: self_determination and personal_satis, 
+# gini and social class
+
+model5 <- glmer(trans_name ~ 
+                  age +
+                  I(age ^ 2) + 
+                  female + 
+                  occupation + 
+                  religion +
+                  religion:religiosity_percent + 
+                  marital_status + 
+                  personal_satis +
+                  contact_lgbti*rain_ind +
+                  contact_lgbti:self_determination +
+                  ideology + 
+                  ideology:gdp_pc +
+                  social_class +
+                  gini +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model5)
+
+# Not significant Gini, contact and self determination, social class
+
+model6 <- glmer(trans_name ~ 
+                  age +
+                  I(age ^ 2) + 
+                  female + 
+                  occupation +
+                  religion +
+                  religion:religiosity_percent + 
+                  marital_status + 
+                  personal_satis +
+                  contact_lgbti*rain_ind +
+                  ideology + 
+                  ideology:gdp_pc +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model6)
+
+# Not significant:Marital status
+
+model7 <- glmer(trans_name ~ 
+                  age +
+                  I(age ^ 2) + 
+                  female + 
+                  occupation +
+                  religion +
+                  religion:religiosity_percent + 
+                  personal_satis +
+                  contact_lgbti*rain_ind +
+                  ideology + 
+                  ideology:gdp_pc +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model7)
+
+# Now we are going to try random slopes
+
+model8 <- glmer(trans_name ~ 
+                  age +
+                  I(age ^ 2) + 
+                  female + 
+                  occupation +
+                  religion +
+                  religion:religiosity_percent + 
+                  personal_satis +
+                  contact_lgbti*rain_ind +
+                  ideology + 
+                  ideology:gdp_pc +
+                  (1 + age + female + ideology|isocntry), 
+                family = "binomial", 
+                data = final_data)
+summary(model8)
+
+lme4::ranef(model8) %>% # This is for extracting random intercepts and slopes
+  str # ¿Como sabemos cual es cual?
