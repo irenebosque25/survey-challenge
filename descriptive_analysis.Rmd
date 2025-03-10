@@ -17,6 +17,7 @@ library(patchwork)
 library(scales)
 library(countries)
 library(showtext)
+library(mice)
 ```
 
 ## Data cleaning copied from the script
@@ -25,7 +26,7 @@ library(showtext)
 survey <- read_dta("data/ZA7575.dta")
 
 survey <- survey |> 
-  select(isocntry, d10, d11, d1, sd3, d7, sd1_4, sd1_7, 
+  select(isocntry, d10, d11, d1, sd3, d7, sd1_4, sd1_7, d15a,
          sd1_8, d70, d63, d60, qc19, qc13_11, qc6_10, qc17_4)
 
 # Recode dependent variable 
@@ -97,11 +98,11 @@ filtered_survey <- filtered_survey %>%
 
 filtered_survey <- filtered_survey %>% 
   mutate(social_class = case_when(
-    d63 == 1 ~ "Working class", 
-    d63 %in% c(2, 3, 4) ~ "Middle class", 
-    d63 == 5 ~ "High class", 
+    d63 %in% c(1, 2) ~ "Working class", 
+    d63 == 3 ~ "Middle class", 
+    d63 %in% c(4, 5) ~ "High class",
     TRUE ~ NA
-  ))
+    ))
 
 # Country names: DE-E and DE-W were problems 
 
@@ -115,6 +116,19 @@ filtered_survey <- filtered_survey %>%
 ### Other variables that I have added
 
 ```{r}
+
+# Current occupation
+
+filtered_survey <- filtered_survey |> 
+  mutate(occupation = case_when(
+    d15a %in% c(1, 3) ~ "Unemployed",
+    d15a == 2 ~ "Student",
+    d15a == 4 ~ "Retired",
+    d15a <= 9 ~ "Self employed",
+    d15a <=  14 ~ "Employed" ,
+    TRUE ~ NA), 
+    occupation = factor(occupation))
+
 # Difficulties to pay your bills
 
 filtered_survey <- filtered_survey |> 
@@ -155,7 +169,7 @@ individual_data <- filtered_survey |>
 
 ```{r}
 summary(individual_data)
-
+str(individual_data)
 table(individual_data$trans_name, individual_data$female)
 ```
 
@@ -248,5 +262,45 @@ b2
 # Boxplots combined
 b <- b1 / b2 
 
+```
+
+### Mice imputation for ideology
+
+```{r}
+colSums(is.na(individual_data))
+
+individual_data <- individual_data %>%
+  mutate(across(where(is.labelled), as_factor))
+
+# Revisar las clases de las variables para asegurar la conversión
+str(individual_data)
+
+# Definir los métodos de imputación para cada variable
+methods <- make.method(individual_data)
+
+# Asignar métodos específicos a cada variable
+methods["ideology"] <- "norm.boot"     # Para variable continua
+methods["trans_name"] <- "pmm"         # Método pmm para variable continua o ordinal
+methods["religion"] <- "polyreg"       # Imputación para variables categóricas
+methods["marital_status"] <- "polyreg"
+methods["occupation"] <- "polyreg"
+methods["trans_school"] <- "polyreg"
+
+# Realizar la imputación con métodos específicos
+imputed_data <- mice(individual_data, m = 10, method = methods, seed = 123)
+
+# Crear el dataframe con los diferentes métodos de imputación para 'ideology'
+data_imputed <- data.frame(
+  trans_name = individual_data$trans_name,
+  original = individual_data$ideology,
+  imputed_median = replace(individual_data$ideology, 
+                           is.na(individual_data$ideology), 
+                           median(individual_data$ideology, na.rm = TRUE)),
+  imputed_normboot = complete(imputed_data)$ideology,
+  imputed_pmm = complete(mice(individual_data, m = 10, 
+                              method = "pmm", seed = 123))$ideology,
+  imputed_rf = complete(mice(individual_data, m = 10, 
+                             method = "rf", seed = 123))$ideology
+)
 ```
 
