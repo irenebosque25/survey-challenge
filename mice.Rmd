@@ -1,0 +1,47 @@
+---
+title: "mice"
+output: html_document
+date: "2025-03-11"
+---
+
+### Mice imputation for ideology
+
+```{r}
+colSums(is.na(individual_data))
+
+individual_data <- individual_data %>%
+  mutate(across(where(is.labelled), as_factor))
+
+# Revisar las clases de las variables para asegurar la conversión
+str(individual_data)
+
+# Definir los métodos de imputación para cada variable
+methods <- make.method(individual_data)
+
+# Asignar métodos específicos a cada variable
+methods["ideology"] <- "norm.boot"     # Para variable continua
+methods["trans_name"] <- "pmm"         # Método pmm para variable continua o ordinal
+methods["religion"] <- "polyreg"       # Imputación para variables categóricas
+methods["marital_status"] <- "polyreg"
+methods["occupation"] <- "polyreg"
+methods["trans_school"] <- "polyreg"
+
+# Realizar la imputación con métodos específicos
+imputed_data <- mice(individual_data, m = 10, method = methods, seed = 123)
+
+# Crear el dataframe con los diferentes métodos de imputación para 'ideology'
+data_imputed <- data.frame(
+  trans_name = individual_data$trans_name,
+  original = individual_data$ideology,
+  imputed_median = replace(individual_data$ideology, 
+                           is.na(individual_data$ideology), 
+                           median(individual_data$ideology, na.rm = TRUE)),
+  imputed_normboot = complete(imputed_data)$ideology,
+  imputed_pmm = complete(mice(individual_data, m = 10, 
+                              method = "pmm", seed = 123))$ideology,
+  imputed_rf = complete(mice(individual_data, m = 10, 
+                             method = "rf", seed = 123))$ideology
+)
+```
+
+
