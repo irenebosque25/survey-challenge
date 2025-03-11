@@ -47,7 +47,6 @@ religiosity <- religiosity |>
   select(country_iso, religiosity_percent)
 ```
 
-
 ```{r}
 # Economic indicators---------------------------------------
 economic_indicators <- read_xlsx("data/country_data.xlsx")
@@ -85,7 +84,6 @@ economic_indicators <- economic_indicators |>
   select(country_iso, gini, gdp_pc)
 ```
 
-
 ```{r}
 # Trans laws------------------------------------------------
 
@@ -107,7 +105,6 @@ trans <- trans |>
                                                 destination = "iso2c")) |> 
   select(country_iso, self_determination)
 ```
-
 
 ```{r}
 # Rainbow score---------------------------------------------
@@ -294,7 +291,6 @@ other_variables <- other_variables |>
 plot_intro(final_data)
 ```
 
-
 ```{r}
 str(final_data)
 ```
@@ -303,6 +299,49 @@ str(final_data)
 summary(final_data)
 ```
 
+The dataset includes both individual-level variables, which capture personal characteristics and opinions, and country-level contextual variables, which help explain cross-country differences in support for transgender rights.
+
+### **Individual-Level Variables:**
+
+These variables reflect personal attributes, experiences, and attitudes:
+
+-   **caseid**: Unique identifier for each participant.
+
+-   **isocntry**: Categorical variable distinguishing respondents by country (28 EU member states).
+
+-   **trans_name**: The key variable of this study, measuring attitudes toward the right of transgender individuals to officially change their name and gender. It is binary, with values of 0 (opposition) and 1 (support). In this dataset, 59.9% of participants expressed support.
+
+-   **female**: 54.5% of the sample are women (14,946), while 45.5% are men (12,492).
+
+-   **age**: Ranges from 15 to 98 years, with a median age of 53. The youngest 25% of respondents are aged 37 or younger, while the oldest 25% are 66 or older. This indicates a relatively older sample, which is relevant for analyzing attitudes, as previous studies have highlighted generational differences in the acceptance of LGBTI rights.
+
+-   **religion**: The majority of religious respondents identify as Christians (15,412), Orthodox Christians (4,016), and Muslims (392), while 21% of the sample report no religious affiliation.
+
+-   **marital_status**: Respondents’ marital status.In our sample, more than half of participants are married (53.5%), followed by 27.8% who are single.This allows us to assess how family experiences might influence attitudes toward the transgender community.
+
+-   **personal_satis**: Categorical variable representing personal life satisfaction, which could be linked to more open or restrictive attitudes.
+
+-   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions. However, 25% of the sample holds an ideology of 7 or higher (more progressive), while another 25% falls at 4 or lower (more conservative).
+
+-   **contact_lgbti**: Prior contact with LGBTI individuals, a crucial factor in reducing prejudice. 11,422 participants report having contact with the LGBTI community, while 15,522 do not.
+
+-   **social_class**: Self-perceived social class, indicating the respondent’s socioeconomic context.
+
+-   **occupation**: Employment status, allowing us to explore the influence of workplace environments. The majority of respondents are retired (8,791) or employed (6,447).Unemployment affects 2,662 participants, while 1,676 are students.
+
+### **Country-Level Contextual Variables:**
+
+In addition to individual-level factors, we incorporate aggregated national indicators to better understand how structural and policy differences influence support for transgender rights.
+
+-   **rain_ind (Rainbow Index)**: Ranges from 17.5 %to 87.84%, with a mean of 50.08%. This index reflects the variation in LGBTI rights and protections across countries.
+
+-   **self_determination**: Legal existence of gender self-determination. A qualitative variable that could influence support for transgender rights.
+
+-   **gini**: Measures economic inequality at the national level and helps assess its impact on attitudes. Ranges from 24.1% to 39%, with a mean of 30.8%.
+
+-   **gdp_pc (GDP per capita)**: Examines the relationship between economic development and attitudes.Ranges from \$9,820 to \$106,343, with a mean of \$34,577.
+
+-   **religiosity_percent**: Percentage of the population that identifies as religious, which is crucial for exploring cultural and religious influences on attitudes.Values range from 21.49% to 100%, with a median of 81.16%.
 
 ```{r}
 table(final_data$trans_name, final_data$female)
@@ -319,6 +358,8 @@ corr_matrix <- cor(corr_data, use = "complete.obs")
 plot_correlation(corr_matrix)
 
 ```
+
+This correlation matrix highlights that support for transgender rights is significantly shaped by economic, cultural, and policy-related factors. Higher economic development, lower inequality, and strong LGBTI legal protections are associated with greater acceptance, while religiosity, conservatism, and age tend to correlate with lower support.
 
 ### Categorical variables
 
@@ -396,6 +437,7 @@ g <- (g1 | g2 | g3) / (g4 | g5 | g6)
 g
 
 ```
+
 ```{r}
 ggplot(final_data, aes(x = age)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "steelblue", alpha = 0.6) +
@@ -404,6 +446,7 @@ ggplot(final_data, aes(x = age)) +
   labs(title = "Age Distribution", x = "Age", y = "Density")
 
 ```
+
 ### Variable Distribution by Country
 
 ```{r}
@@ -440,7 +483,6 @@ mapCountryData(map_data,
                mapRegion = "Europe")  
 
 ```
-
 
 ```{r}
 #Interactive Plot Religiosity vs Rainbow Indicator per Country
@@ -506,7 +548,9 @@ ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRU
   scale_fill_manual(values = colors_rep) 
 
 ```
+
 ### Bivariate Analysis with Target Variable
+
 ```{r}
 
 # Crear dataframe agregando el % de apoyo a derechos trans por país
@@ -525,7 +569,6 @@ mapCountryData(map_data,
 
 ```
 
-
 ```{r}
 ggplot(final_data, aes(x = as.factor(trans_name), y = ideology, fill = as.factor(trans_name))) + 
   geom_boxplot(alpha = 0.6) + 
@@ -538,6 +581,7 @@ ggplot(final_data, aes(x = as.factor(trans_name), y = ideology, fill = as.factor
   theme(legend.position = "none")
 
 ```
+
 ```{r}
 ggplot(final_data, aes(x = as.factor(trans_name), y = religiosity_percent, fill = as.factor(trans_name))) +
   geom_boxplot(alpha = 0.6) +
@@ -631,4 +675,3 @@ m <- plot <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
 
 print(m)
 ```
-
