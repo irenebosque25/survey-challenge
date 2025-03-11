@@ -236,9 +236,6 @@ individual_data <- filtered_survey |>
          marital_status, personal_satis, ideology, 
          contact_lgbti, social_class, occupation)
 ```
-
-
-
 ```{r}
 #Merge
 
@@ -301,6 +298,8 @@ other_variables <- other_variables |>
 ```{r}
 library(DataExplorer)
 library(ggplot2)
+library(ggrepel)  
+library(plotly)
 ```
 
 
@@ -320,6 +319,18 @@ summary(final_data)
 
 ```{r}
 table(final_data$trans_name, final_data$female)
+```
+
+```{r}
+
+#seleccionamos variables numericas y a nivel país
+corr_data <- final_data |> 
+  select(trans_name, age, ideology, rain_ind, gini, gdp_pc, religiosity_percent)
+
+corr_matrix <- cor(corr_data, use = "complete.obs")
+
+plot_correlation(corr_matrix)
+
 ```
 
 ### Categorical variables
@@ -408,25 +419,160 @@ ggplot(final_data, aes(x = age)) +
 ```
 ### Variable Distribution by Country
 
+```{r}
+#Contact with LGTBI community by country
+country_order <- final_data %>%
+  filter(!is.na(contact_lgbti)) %>%
+  group_by(isocntry) %>%
+  summarise(no_contact_prop = mean(contact_lgbti == "No contact")) %>%
+  arrange(desc(no_contact_prop))
 
 
+ggplot(final_data, aes(x = factor(isocntry, levels = country_order$isocntry), fill = contact_lgbti)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  labs(title = "Contact with LGTBI community by country", 
+       x = "Country", y = "Percentage") +
+  scale_fill_manual(values = c("Contact" = "olivedrab3", "No contact" = "red2")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
 
 ```{r}
 
-#seleccionamos variables numericas y a nivel país
-corr_data <- final_data |> 
-  select(trans_name, age, ideology, rain_ind, gini, gdp_pc, religiosity_percent)
+library(rworldmap)
 
-corr_matrix <- cor(corr_data, use = "complete.obs")
+data_country <- aggregate(as.numeric(contact_lgbti) ~ isocntry, data = final_data, mean, na.rm = TRUE)
 
-plot_correlation(corr_matrix)
+map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
+
+mapCountryData(map_data, 
+               nameColumnToPlot = "as.numeric(contact_lgbti)", 
+               mapTitle = "Contact with the LGTBI community per Country", 
+               catMethod = "quantiles", 
+               colourPalette = "Blues", #puedo poner otra paleta si no os gusta(colourPalette = brewer.pal(9, "Blues")))
+               mapRegion = "Europe")  
+
+```
+
+
+```{r}
+#Interactive Plot Religiosity vs Rainbow Indicator per Country
+p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocntry)) +
+  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
+  scale_color_viridis_d(option = "C") +  
+  theme_light(base_size = 14) + 
+  theme(
+    legend.position = "none", 
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
+    axis.text = element_text(size = 14),  
+    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
+    panel.grid.minor = element_blank(), 
+    plot.margin = margin(10, 10, 10, 10)  
+  ) +
+  labs(
+    title = "Religiosity vs Rainbow Indicator per Country",
+    x = "Percentage of Religiosity", 
+    y = "Rainbow Indicator"
+  )
+
+ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+```
+
+```{r}
+#Interactive Plot GDP per capita vs Rainbow Indicator per Country
+p2 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry)) +
+  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
+  scale_color_viridis_d(option = "C") +  
+  theme_light(base_size = 14) + 
+  theme(
+    legend.position = "none", 
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
+    axis.text = element_text(size = 14),  
+    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
+    panel.grid.minor = element_blank(), 
+    plot.margin = margin(10, 10, 10, 10)  
+  ) +
+  labs(
+    title = "GDP per capita vs Rainbow Indicator per Country",
+    x = "GDP per capita", 
+    y = "Rainbow Indicator"
+  )
+
+ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+
+```
+
+```{r}
+#Distribution of the Political Ideology by Country
+
+colors_ue <- c("#0033A0", "#FFCC00", "#0066CC", "#FFFF00", "#3399FF", "#FFCC33", "#1E3A5F", "#FF9900", "#99CCFF") #esto lo he hecho para imitar un poco los colores de la UE pero no se si me convence, si os convence lo aplico a todo el resto
+
+colors_rep <- rep(colors_ue, length.out = length(unique(final_data$isocntry)))
+
+ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRUE), y = ideology, fill = isocntry)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of the Political Ideology by Country", 
+       x = "Country", y = "Ideology (1 = Left, 10 = Right)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  scale_fill_manual(values = colors_rep) 
+
+```
+### Bivariate Analysis with Target Variable
+```{r}
+library(rworldmap)
+
+# Crear dataframe agregando el % de apoyo a derechos trans por país
+data_country <- aggregate(as.numeric(trans_name) ~ isocntry, data = final_data, mean, na.rm = TRUE)
+
+# Unir datos con el mapa mundial
+map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
+
+# Mapa
+mapCountryData(map_data, 
+               nameColumnToPlot = "as.numeric(trans_name)", 
+               mapTitle = "Support for change of Documents of the Trans Community per Country", 
+               catMethod = "quantiles", 
+               colourPalette = "Blues", 
+               mapRegion = "Europe")
+
+```
+
+
+```{r}
+ggplot(final_data, aes(x = as.factor(trans_name), y = ideology, fill = as.factor(trans_name))) + 
+  geom_boxplot(alpha = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Political Ideology vs Support Trans Documents", 
+       x = "Support for the change of Documents of the Trans Community", 
+       y = "Ideology (1 = Left, 10 = Right)") + 
+  scale_fill_manual(values = c("0" = "red2", "1" = "olivedrab3")) + 
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) + 
+  theme(legend.position = "none")
+
+```
+```{r}
+ggplot(final_data, aes(x = as.factor(trans_name), y = religiosity_percent, fill = as.factor(trans_name))) +
+  geom_boxplot(alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Religiosity vs Support Trans Documents", 
+       x = "Support for the change of Documents of the Trans Community", 
+       y = "Percentage of Religiosity") + 
+  scale_fill_manual(values = c("0" = "red2", "1" = "olivedrab3")) + 
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) + 
+  theme(legend.position = "none")
 
 ```
 
 
 
 
-### Questions related with trans people
+
+
+## Questions related with trans people
 
 ```{r}
 
