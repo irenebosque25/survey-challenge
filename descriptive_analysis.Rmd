@@ -632,40 +632,56 @@ b
 
 ### Mice imputation for ideology
 
+Look at NA distribution 
 ```{r}
 colSums(is.na(final_data))
+```
 
+Use ideology because ... 
+
+```{r}
 mice_data <- final_data |> 
   mutate(across(where(is.labelled), as_factor),
          ideology = as.numeric(ideology)) |>
   select(-caseid, -religiosity_percent)
-  
-imputed_rf = mice(mice_data, method = "rf", 
-                  m = 3, maxit = 3, seed = 123)
-
-imputed_pmm = mice(mice_data, method = "pmm",
-                   m = 3, maxit = 3, seed = 123)
 
 ```
 
+There is categorical variables, so we can only test on Random Forest and Pmm
+
+m = 3 because of loading times 
+
 ```{r}
+imputed_comparison <- data.frame(
+  original = mice_data$ideology,
+  imputed_rf = complete(mice(mice_data, method = "rf", 
+                             m = 3, maxit = 3, 
+                             seed = 123))$ideology,
+  imputed_pmm = complete(mice(mice_data, method = "pmm",
+                              m = 3, maxit = 3, 
+                              seed = 123))$ideology)
+```
+
+Plot results to compare the resulting distributions: 
+
+```{r}
+# define variables, titles and colours 
 methods <- c("original", "imputed_rf" , "imputed_pmm")
 titles <- c("Distribution of the Age Variable",
            "Random Forest-imputed Distribution",
             "PMM-imputed Distribution")
 colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
 
-imputed_comparison <- data.frame(
-  original = mice_data$ideology,
-  imputed_rf = complete(imputed_rf)$ideology,
-  imputed_pmm = complete(imputed_pmm)$ideology)
 
+# transform to long form 
 data_imputed_long <- imputed_comparison |>
   pivot_longer(cols = all_of(methods), names_to = "method", 
                 values_to = "value") |>
   mutate(title = factor(method, levels = methods, labels = titles))
 
-m <- plot <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
+
+# plots 
+plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
   geom_histogram(binwidth = 1, color = "black", position = "identity") +
   facet_wrap(~ title, scales = "free_y") +
   scale_fill_manual(values = colors_fill) +
@@ -673,5 +689,7 @@ m <- plot <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
   theme(legend.position = "none")
 
 
-print(m)
+print(plot_mice)
 ```
+
+Supplementing dataset 
