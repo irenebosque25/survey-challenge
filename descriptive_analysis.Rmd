@@ -18,6 +18,11 @@ library(scales)
 library(countries)
 library(showtext)
 library(mice)
+library(DataExplorer)
+library(ggrepel)  
+library(plotly)
+library(rworldmap)
+library(janitor)
 ```
 
 ## Data cleaning copied from the script
@@ -161,7 +166,7 @@ filtered_survey <- filtered_survey |>
     d15a == 2 ~ "Student",
     d15a == 4 ~ "Retired",
     d15a <= 9 ~ "Self employed",
-    d15a <=  14 ~ "Employed" ,
+    d15a <=  18 ~ "Employed" ,
     TRUE ~ NA), 
     occupation = factor(occupation))
 
@@ -221,7 +226,7 @@ filtered_survey <- filtered_survey %>%
     d63 == 3 ~ "Middle class", 
     d63 %in% c(4, 5) ~ "High class", 
     TRUE ~ NA
-  )) #porque esta distribución???? pq en principio 2 y 4 es lower en higher middle class segun la encuesta
+  ))
 
 # Country names: DE-E and DE-W were problems 
 
@@ -236,6 +241,7 @@ individual_data <- filtered_survey |>
          marital_status, personal_satis, ideology, 
          contact_lgbti, social_class, occupation)
 ```
+
 ```{r}
 #Merge
 
@@ -246,22 +252,10 @@ final_data <- individual_data |>
   left_join(religiosity, by = c("isocntry" = "country_iso"))
 ```
 
-
-
 ### Other variables that I have added
 
 ```{r}
 
-# Difficulties to pay your bills
-
-other_variables <- survey |> 
-  mutate(bills = case_when(
-    d60 == 1 ~ "Most of the time",
-    d60 == 2 ~ "From time to time",
-    d60 == 3 ~ "Almost never/ never",
-    TRUE ~ NA
-    ))
-         
 # How comfortable you would feel if one of your children was in love with a trans person
 
 other_variables <- other_variables |> 
@@ -295,13 +289,6 @@ other_variables <- other_variables |>
 ```
 
 ## Individual descriptive analysis
-```{r}
-library(DataExplorer)
-library(ggplot2)
-library(ggrepel)  
-library(plotly)
-```
-
 
 ```{r}
 plot_intro(final_data)
@@ -441,8 +428,6 @@ ggplot(final_data, aes(x = factor(isocntry, levels = country_order$isocntry), fi
 
 ```{r}
 
-library(rworldmap)
-
 data_country <- aggregate(as.numeric(contact_lgbti) ~ isocntry, data = final_data, mean, na.rm = TRUE)
 
 map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
@@ -477,7 +462,7 @@ p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocn
     y = "Rainbow Indicator"
   )
 
-ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+# ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 ```
 
 ```{r}
@@ -500,7 +485,7 @@ p2 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry)) +
     y = "Rainbow Indicator"
   )
 
-ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+# ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 
 ```
 
@@ -523,7 +508,6 @@ ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRU
 ```
 ### Bivariate Analysis with Target Variable
 ```{r}
-library(rworldmap)
 
 # Crear dataframe agregando el % de apoyo a derechos trans por país
 data_country <- aggregate(as.numeric(trans_name) ~ isocntry, data = final_data, mean, na.rm = TRUE)
@@ -567,11 +551,6 @@ ggplot(final_data, aes(x = as.factor(trans_name), y = religiosity_percent, fill 
 
 ```
 
-
-
-
-
-
 ## Questions related with trans people
 
 ```{r}
@@ -607,45 +586,49 @@ b
 
 ```
 
-
-
 ### Mice imputation for ideology
 
 ```{r}
-colSums(is.na(individual_data))
+colSums(is.na(final_data))
 
-individual_data <- individual_data %>%
-  mutate(across(where(is.labelled), as_factor))
+mice_data <- final_data |> 
+  mutate(across(where(is.labelled), as_factor),
+         ideology = as.numeric(ideology)) |>
+  select(-caseid, -religiosity_percent)
+  
+imputed_rf = mice(mice_data, method = "rf", 
+                  m = 3, maxit = 3, seed = 123)
 
-# Revisar las clases de las variables para asegurar la conversión
-str(individual_data)
+imputed_pmm = mice(mice_data, method = "pmm",
+                   m = 3, maxit = 3, seed = 123)
 
-# Definir los métodos de imputación para cada variable
-methods <- make.method(individual_data)
+```
 
-# Asignar métodos específicos a cada variable
-methods["ideology"] <- "norm.boot"     # Para variable continua
-methods["trans_name"] <- "pmm"         # Método pmm para variable continua o ordinal
-methods["religion"] <- "polyreg"       # Imputación para variables categóricas
-methods["marital_status"] <- "polyreg"
-methods["occupation"] <- "polyreg"
-methods["trans_school"] <- "polyreg"
+```{r}
+methods <- c("original", "imputed_rf" , "imputed_pmm")
+titles <- c("Distribution of the Age Variable",
+           "Random Forest-imputed Distribution",
+            "PMM-imputed Distribution")
+colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
 
-# Realizar la imputación con métodos específicos
-imputed_data <- mice(individual_data, m = 10, method = methods, seed = 123)
+imputed_comparison <- data.frame(
+  original = mice_data$ideology,
+  imputed_rf = complete(imputed_rf)$ideology,
+  imputed_pmm = complete(imputed_pmm)$ideology)
 
-# Crear el dataframe con los diferentes métodos de imputación para 'ideology'
-data_imputed <- data.frame(
-  trans_name = individual_data$trans_name,
-  original = individual_data$ideology,
-  imputed_median = replace(individual_data$ideology, 
-                           is.na(individual_data$ideology), 
-                           median(individual_data$ideology, na.rm = TRUE)),
-  imputed_normboot = complete(imputed_data)$ideology,
-  imputed_pmm = complete(mice(individual_data, m = 10, 
-                              method = "pmm", seed = 123))$ideology,
-  imputed_rf = complete(mice(individual_data, m = 10, 
-                             method = "rf", seed = 123))$ideology
-)
+data_imputed_long <- imputed_comparison |>
+  pivot_longer(cols = all_of(methods), names_to = "method", 
+                values_to = "value") |>
+  mutate(title = factor(method, levels = methods, labels = titles))
+
+m <- plot <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "black", position = "identity") +
+  facet_wrap(~ title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+
+print(m)
 ```
 
