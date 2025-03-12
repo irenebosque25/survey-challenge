@@ -1,0 +1,70 @@
+---
+title: "tabla"
+output: html_document
+date: "2025-03-12"
+---
+
+
+```{r}
+library(stargazer)
+
+stargazer(model_1,  
+          type="text",
+          dep.var.labels=c("QC_19"),
+          keep = c(
+            "(Intercept)", 
+            "age", 
+            "I(age^2)", 
+            "female1", 
+            "occupationRetired", 
+            "occupationSelf employed", 
+            "occupationStudent", 
+            "occupationUnemployed",
+            "religionMuslims", 
+            "religionNot religious", 
+            "religionOrthodox Chrsitian", 
+            "religionOther religions", 
+            "religiosity_percent", 
+            "personal_satisSatisfied", 
+            "contact_lgbtiContact", 
+            "rain_ind", 
+            "self_determination1", 
+            "ideology", 
+            "gdp_pc", 
+            "religionMuslims:religiosity_percent", 
+            "religionNot religious:religiosity_percent", 
+            "religionOrthodox Chrsitian:religiosity_percent",
+            "religionOther religions:religiosity_percent", 
+            "contact_lgbtiContact:rain_ind", 
+            "ideology:gdp_pc"
+            ),
+          covariate.labels = c(
+            "(Intercept)", 
+            "Age of respondent", 
+            "Age of respondent (squared)", 
+            "Gender of respondent (female)", 
+            "Occupation of participant: Retired", 
+            "Occupation of participant: Self employed", 
+            "Occupation of participant: Student", 
+            "Occupation of participant: Unemployed",
+            "Religious affiliation of participant: Muslims", 
+            "Religious affiliation of participant: Not religious", 
+            "Religious affiliation of participant: Orthodox Chrsitian", 
+            "Religious affiliation of participant: Other religions", 
+            "Religiosity of the country's populations (%)", 
+            "Personal satisfaction of participants: Satisfied", 
+            "Contact with LGBTI community of participant: Contact", 
+            "Rainbow Europe Country Indicator", 
+            "Law in favour of Gender identitfy self-determination in a country: Exists", 
+            "Ideology scale of participant", 
+            "GDP of countries (%) ", 
+            "Interaction between Muslim religion of particpant and percentage of religiosity in the country", 
+            "Interaction between No religion of particpant and percentage of religiosity in the country", 
+            "Interaction between Orthodox Christian religion of particpant and percentage of religiosity in the country",
+            "Interaction between Other religion of particpant and percentage of religiosity in the country", 
+            "Interaction between participant having contact to LGBTI community and Rainbow Europe Country Indicator", 
+            "Interaction between ideology of a participant and GDP (%) ofa country",        
+          out="models.txt")
+)
+
+```
