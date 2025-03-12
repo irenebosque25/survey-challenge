@@ -1,19 +1,61 @@
 ---
 title: "challenge"
+author: "Mafalda González, David Pereiro, Irene Bosque y Pablo Aísa"
 output: html_document
-date: "2025-03-05"
+date: "2025-03-14"
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Discrimination in the EU
+
+## Introduction
+
 ```{r}
-library(haven)
 library(tidyverse)
 library(readxl)
+library(haven)
+library(patchwork)
+library(scales)
 library(countries)
-library(countrycode)
+library(showtext)
+library(mice)
+library(DataExplorer)
+library(ggrepel)  
+library(plotly)
+library(rworldmap)
+library(janitor)
+```
 
-survey <- read_dta("data/ZA7575.dta")
-economic_indicators <- read_xlsx("data/country_data.xlsx")
+## Data cleaning
+
+### Country-level variables
+
+```{r}
+# Religiosity-----------------------------------------------
 religiosity <- read_dta("data/replication_data.dta")
+
+religiosity <- religiosity |> 
+  group_by(country_name) |> 
+  slice_max(year) |> 
+  ungroup()
+
+religiosity <- religiosity |> 
+  select(religiosity_percent, country_name)
+
+religiosity <- religiosity |> 
+  mutate(country = country_name(country_name, to = "simple", 
+                                verbose = TRUE),
+         country_iso = countrycode::countrycode(country, origin = "country.name",
+                                                destination = "iso2c")) |> 
+  select(country_iso, religiosity_percent)
+```
+
+```{r}
+# Economic indicators---------------------------------------
+economic_indicators <- read_xlsx("data/country_data.xlsx")
 
 economic_indicators <- economic_indicators |> 
   drop_na(`Series Code`) 
@@ -44,104 +86,612 @@ economic_indicators <- economic_indicators |>
   mutate(country = country_name(country, to = "simple", 
                                 verbose = TRUE),
          country_iso = countrycode::countrycode(country, origin = "country.name",
-                                            destination = "iso2c"))
+                                                destination = "iso2c")) |> 
+  select(country_iso, gini, gdp_pc)
+```
+
+```{r}
+# Trans laws------------------------------------------------
+
+trans <-  read_csv("data/trans.csv")
+
+trans <- trans |> 
+  row_to_names(row_number = 1)
+
+trans <- trans |> 
+  clean_names() |> 
+  select(2, 8) |> 
+  drop_na(na_2) |> 
+  rename("country" = "na_2")
+
+trans <- trans |> 
+  mutate(country = country_name(country, to = "simple", 
+                                verbose = TRUE),
+         country_iso = countrycode::countrycode(country, origin = "country.name",
+                                                destination = "iso2c")) |> 
+  select(country_iso, self_determination)
+```
+
+```{r}
+# Rainbow score---------------------------------------------
+rainbow <- read_csv("data/rainbow.csv")
+
+rainbow <- rainbow |> 
+  row_to_names(row_number = 1) |> 
+  clean_names() |> 
+  select(2, 3) |> 
+  drop_na(na_2) |> 
+  rename("country" = "na_2",
+         "rain_ind" = "na_3") |> 
+  mutate(rain_ind = as.numeric(rain_ind) / 100)
+
+rainbow <- rainbow |> 
+  mutate(country = country_name(country, to = "simple", 
+                                verbose = TRUE),
+         country_iso = countrycode::countrycode(country, origin = "country.name",
+                                                destination = "iso2c")) |> 
+  select(country_iso, rain_ind)
+
+```
+
+### Individual level variables from the survey
+
+```{r}
+survey <- read_dta("data/ZA7575.dta")
+
+survey <- survey |> 
+  select(caseid, isocntry, d10, d11, 
+         d1, sd3, d7, sd1_4, sd1_7, sd1_8, d70,
+         d63, qc19, d15a, d60, qc13_11, qc6_10, qc17_4)
+
+# Recode dependent variable 
+filtered_survey <- survey |> 
+  mutate(trans_name = case_when(
+    qc19==1 ~ 1,
+    qc19==2 ~ 0,
+    qc19==3 ~ NA)) 
+
+# Recode gender
+filtered_survey <- filtered_survey |> 
+  mutate(female = case_when(
+    d10 == 1 ~ 0,
+    d10 == 2 ~ 1,
+    TRUE ~ NA),
+    female = factor(female))
+
+# Recode age
+filtered_survey <- filtered_survey |> 
+  mutate(age = if_else(d11 == 99 , NA, d11))
+
+# Current occupation
+filtered_survey <- filtered_survey |> 
+  mutate(occupation = case_when(
+    d15a %in% c(1, 3) ~ "Unemployed",
+    d15a == 2 ~ "Student",
+    d15a == 4 ~ "Retired",
+    d15a <= 9 ~ "Self employed",
+    d15a <=  18 ~ "Employed" ,
+    TRUE ~ NA), 
+    occupation = factor(occupation))
+
+# Recode religion 
+filtered_survey <- filtered_survey |> 
+  mutate(religion = case_when(
+    sd3 %in% c(1, 3, 4) ~ "Christians", 
+    sd3 == 2 ~ "Orthodox Christian", 
+    sd3 %in% c(6, 7, 8) ~ "Muslims", 
+    sd3 == 5 ~ "Jewish",
+    sd3 %in% c(10, 11, 14) ~ "Other religions", 
+    sd3 %in% c(12, 13) ~ "Not religious", 
+    TRUE ~ NA),
+    religion = factor(religion))
+
+# Marital status
+filtered_survey <- filtered_survey |> 
+  mutate(marital_status = case_when(
+    d7 <= 4 ~ "Married",
+    d7 <= 10 ~ "Single", 
+    d7 <= 12 ~ "Divorced",
+    d7 <=  14 ~ "Widowed",
+    d7 == 15 ~ "Other", 
+    TRUE ~ NA), 
+    marital_status = factor(marital_status))
+
+# Personal satisfaction
+filtered_survey <- filtered_survey |> 
+  mutate(personal_satis = if_else(d70 == 5, NA, d70),
+         personal_satis = case_when(
+           personal_satis <= 2 ~ "Satisfied",
+           personal_satis > 2 ~ "Not satisfied"))
+
+# Ideology
+filtered_survey <- filtered_survey |> 
+  mutate(ideology = if_else(d1 > 10, NA, d1)) 
+
+# Contact LGBTQ+
+filtered_survey <- filtered_survey |>  
+  mutate(contact_lgbti = case_when(
+    sd1_4 == 1 | sd1_7 == 1 | sd1_8 == 1 ~ "Contact", # There is contact
+    sd1_4 == 2 | sd1_7 == 2 | sd1_8 == 2 ~ "No contact", # There is not contact
+    TRUE ~ NA),
+  contact_lgbti = factor(contact_lgbti))
+
+# Self-perception of the social class
+filtered_survey <- filtered_survey |> 
+  mutate(social_class = case_when(
+    d63 %in% c(1, 2) ~ "Working class", 
+    d63 == 3 ~ "Middle class", 
+    d63 %in% c(4, 5) ~ "High class", 
+    TRUE ~ NA))
+
+# Country names: DE-E and DE-W were problems 
+filtered_survey <- filtered_survey |>  
+  mutate(country = country_name(isocntry, to = "simple", 
+                                verbose = TRUE, poor_matches = TRUE),
+         isocntry = countrycode::countrycode(
+           country, origin = "country.name", destination = "iso2c"))
+  
+individual_data <- filtered_survey |> 
+  select(caseid, isocntry, trans_name, female, age, religion, 
+         marital_status, personal_satis, ideology, 
+         contact_lgbti, social_class, occupation)
+```
+
+```{r}
+# Final merge
+final_data <- individual_data |> 
+  left_join(rainbow, by = c("isocntry" = "country_iso")) |> 
+  left_join(trans, by = c("isocntry" = "country_iso")) |> 
+  left_join(economic_indicators, by = c("isocntry" = "country_iso")) |> 
+  left_join(religiosity, by = c("isocntry" = "country_iso"))
+```
+
+### Other interesting variables from the survey
+
+```{r}
+
+other_variables <- filtered_survey |> 
+  select(isocntry, qc13_11, qc6_10, qc17_4)
+
+# How comfortable you would feel if one of your children was in love with a trans person
+other_variables <- other_variables |> 
+  mutate(child_love = if_else(qc13_11 > 10, NA, qc13_11))
+
+# Transgender person in a high political position
+other_variables <- other_variables |>  
+  mutate(trans_pol = if_else(qc6_10 > 10, NA, qc6_10))
+
+# Information in schools about being transgender 
+other_variables <- other_variables |> 
+  mutate(trans_school = case_when(
+    qc17_4 == 1 ~ "Totally agree",
+    qc17_4 == 2 ~ "Tend to agree",
+    qc17_4 == 3 ~ "Tend to disagree",
+    qc17_4 == 4 ~ "Totally disagree",
+    TRUE ~ NA),
+    trans_school = factor(trans_school))
+
+other_variables <- other_variables |> 
+  mutate(country = country_name(isocntry, to = "simple", 
+                                verbose = TRUE, poor_matches = TRUE),
+         isocntry = countrycode::countrycode(
+           country, origin = "country.name", destination = "iso2c"))
+  
+other_variables <- other_variables |> 
+  select(child_love, trans_pol, trans_school, isocntry)
+```
+
+## Descriptive analysis
+
+```{r}
+plot_intro(final_data, 
+           ggtheme = theme_minimal(),
+           theme_config = list(
+             title
+             legend.position = "none",
+             axis.title = element_text(size = 12, face = "bold")))
+```
+
+```{r}
+str(final_data)
+```
+
+```{r}
+summary(final_data)
+```
+
+The dataset includes both individual-level variables, which capture personal characteristics and opinions, and country-level contextual variables, which help explain cross-country differences in support for transgender rights.
+
+### **Individual-Level Variables:**
+
+These variables reflect personal attributes, experiences, and attitudes:
+
+-   **caseid**: Unique identifier for each participant.
+
+-   **isocntry**: Categorical variable distinguishing respondents by country (28 EU member states).
+
+-   **trans_name**: The key variable of this study, measuring attitudes toward the right of transgender individuals to officially change their name and gender. It is binary, with values of 0 (opposition) and 1 (support). In this dataset, 59.9% of participants expressed support.
+
+-   **female**: 54.5% of the sample are women (14,946), while 45.5% are men (12,492).
+
+-   **age**: Ranges from 15 to 98 years, with a median age of 53. The youngest 25% of respondents are aged 37 or younger, while the oldest 25% are 66 or older. This indicates a relatively older sample, which is relevant for analyzing attitudes, as previous studies have highlighted generational differences in the acceptance of LGBTI rights.
+
+-   **religion**: The majority of religious respondents identify as Christians (15,412), Orthodox Christians (4,016), and Muslims (392), while 21% of the sample report no religious affiliation.
+
+-   **marital_status**: Respondents’ marital status.In our sample, more than half of participants are married (53.5%), followed by 27.8% who are single.This allows us to assess how family experiences might influence attitudes toward the transgender community.
+
+-   **personal_satis**: Categorical variable representing personal life satisfaction, which could be linked to more open or restrictive attitudes.
+
+-   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions. However, 25% of the sample holds an ideology of 7 or higher (more progressive), while another 25% falls at 4 or lower (more conservative).
+
+-   **contact_lgbti**: Prior contact with LGBTI individuals, a crucial factor in reducing prejudice. 11,422 participants report having contact with the LGBTI community, while 15,522 do not.
+
+-   **social_class**: Self-perceived social class, indicating the respondent’s socioeconomic context.
+
+-   **occupation**: Employment status, allowing us to explore the influence of workplace environments. The majority of respondents are retired (8,791) or employed (6,447).Unemployment affects 2,662 participants, while 1,676 are students.
+
+### **Country-Level Contextual Variables:**
+
+In addition to individual-level factors, we incorporate aggregated national indicators to better understand how structural and policy differences influence support for transgender rights.
+
+-   **rain_ind (Rainbow Index)**: Ranges from 17.5 %to 87.84%, with a mean of 50.08%. This index reflects the variation in LGBTI rights and protections across countries.
+
+-   **self_determination**: Legal existence of gender self-determination. A qualitative variable that could influence support for transgender rights.
+
+-   **gini**: Measures economic inequality at the national level and helps assess its impact on attitudes. Ranges from 24.1% to 39%, with a mean of 30.8%.
+
+-   **gdp_pc (GDP per capita)**: Examines the relationship between economic development and attitudes.Ranges from \$9,820 to \$106,343, with a mean of \$34,577.
+
+-   **religiosity_percent**: Percentage of the population that identifies as religious, which is crucial for exploring cultural and religious influences on attitudes.Values range from 21.49% to 100%, with a median of 81.16%.
+The dataset includes both individual-level variables, which capture personal characteristics and opinions, and country-level contextual variables, which help explain cross-country differences in support for transgender rights.
+
+```{r}
+# Numerical and country variables
+
+corr_data <- final_data |> 
+  select(trans_name, age, ideology, rain_ind, gini, gdp_pc, religiosity_percent)
+
+corr_matrix <- cor(corr_data, use = "complete.obs")
+
+plot_correlation(corr_matrix)
+
+```
+
+This correlation matrix highlights that support for transgender rights is significantly shaped by economic, cultural, and policy-related factors. Higher economic development, lower inequality, and strong LGBTI legal protections are associated with greater acceptance, while religiosity, conservatism, and age tend to correlate with lower support.
+
+### Categorical variables
+
+Distribution of the categorical variables in all the dataset.
+
+```{r}
+font_add_google("Voces", "voces")
+showtext_auto()
+
+# Religion
+g1 <- ggplot(final_data, aes(x = religion)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#9C9EDE", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Religious identification", x = "Religion", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Marital status
+g2 <- ggplot(final_data, aes(x = marital_status)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#98DF8A", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Marital status distribution", x = "Status", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Personal satisfaction
+g3 <- ggplot(final_data, aes(x = personal_satis)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#FF9896", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Personal Satisfaction", 
+       x = "Response", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Social class
+g4 <- ggplot(final_data, aes(x = social_class)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#9EDAE5", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Self-reported social slass", x = "Social class", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Occupation
+
+g5 <- ggplot(final_data, aes(x = occupation)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#E7BA52", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Occupation distribution", x = "Occupation", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Contact with LGTB community
+
+g6 <- ggplot(final_data, aes(x = contact_lgbti)) +
+  geom_bar(aes(y = ..prop.., group = 1), fill = "#24325F", color = "black") +
+  scale_y_continuous(labels = percent_format()) +
+  labs(title = "Contact with the LGTBI community", x = "Response", y = "Percentage") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Graphs combined
+g <- (g1 | g2 | g3) / (g4 | g5 | g6) 
+g
 
 ```
 
 ```{r}
-religiosity <- religiosity |> 
-  group_by(country_name) |> 
-  slice_max(year) |> 
-  ungroup()
-
-religiosity <- religiosity |> 
-  select(religiosity_percent, country_name, e_regionpol)
+ggplot(final_data, aes(x = age)) +
+  geom_histogram(aes(y = ..density..), bins = 30, 
+                 fill = "steelblue", alpha = 0.6) +
+  geom_density(color = "red", size = 1) +
+  theme_minimal() +
+  labs(title = "Age Distribution", x = "Age", y = "Density")
 ```
 
-
-Seleccionamos las variables que hemos seleccionado previamente:
-
-d70, sd1, sd2, sd3,qc1, qc2, qc3, qc4, qc5, qc6,qc7,qc8,qc9,qc10,qc11, qc12,qc13, qc14, qc15, qc16, qc17,qc18, qc19, qc20, d1, d7, d10, d8, d15a, d25
-
+### Distributions of variables by country
 
 ```{r}
-first <- survey |> 
-  select(c(country, isocntry, q1_1, q1_2, q1_3, q1_4, q1_5, q1_6, q1_7, q1_8, q1_9, q1_9, q1_10, q1_11, q1_12, q1_13, q1_14, q1_15, q1_16, q1_17, q1_18, q1_19, q1_20, q1_21, q1_22, q1_23, q1_24, q1_25, q1_26, q1_27, q1_28, q1_29, q1_30, d11, d70, sd1_1, sd1_2, sd1_3, sd1_4, sd1_5, sd1_6, sd1_7, sd1_8, sd2_1, sd2_2, sd2_3, sd2_4, sd2_5, sd2_6, sd2_7, sd2_8, sd2_9, sd2_10, sd3, qc1_1, qc1_2, qc1_3, qc1_4, qc1_5, qc1_6, qc1_7, qc1_8, qc1_9, qc1_10, qc2_1, qc2_2, qc2_3, qc2_4, qc2_5, qc2_6, qc2_7, qc2_8, qc2_9, qc2_10, qc2_11, qc2_12, qc2_13, qc2_14, qc2_15, qc2_16, qc3, qc4_1, qc4_2, qc4_4, qc4_3, qc4_5, qc4_6, qc4_7, qc4_8, qc4_9, qc4_10, qc4_11, qc4_12, qc4_13, qc4_14, qc4_15, qc4_16, qc4_17, qc4_18, qc5_1, qc5_2, qc5_3, qc5_4, qc6_1, qc6_2, qc6_3, qc6_4, qc6_5, qc6_6, qc6_7, qc6_8, qc6_9, qc6_10, qc6_11, qc7, qc9_1, qc9_2, qc9_3, qc9_4, qc9_5, qc9_6, qc9_7, qc9_8, qc9_9, qc9_10, qc9_11, qc10,  qc12_1, qc12_2, qc12_3, qc12_4, qc12_5, qc12_6, qc12_7, qc12_8, qc12_9, qc12_10, qc12_11, qc12_12, qc12_13, qc12_13, qc12_14, qc12_15, qc13_1, qc13_2, qc13_3, qc13_4, qc13_5, qc13_6, qc13_7, qc13_8, qc13_9, qc13_10, qc13_11, qc13_14, qc13_15, qc14, qc15_1, qc15_2, qc15_3, qc17_1, qc17_2, qc17_3, qc17_4, qc17_5, qc17_6, qc17_7, qc18_1, qc18_2, qc18_3, qc19, qc20, d1, d7, d10, d8, d25, p4))
-```
+# Contact with LGTBI community by country
+country_order <- final_data |> 
+  filter(!is.na(contact_lgbti)) |> 
+  group_by(isocntry) |> 
+  summarise(no_contact_prop = mean(contact_lgbti == "No contact")) |> 
+  arrange(desc(no_contact_prop))
 
-Mi primera propuesta de filtrado: 
+ggplot(final_data, aes(x = factor(isocntry, 
+                                  levels = country_order$isocntry), 
+                       fill = contact_lgbti)) +
+  geom_bar(position = "fill") +
+  theme_minimal() +
+  labs(title = "Contact with LGTBI community by country", 
+       x = "Country", y = "Percentage") +
+  scale_fill_manual(
+    values = c("Contact" = "olivedrab3", "No contact" = "red2")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 ```{r}
-filtered_survey <- survey |>  
-  select(c(serialid, country, isocntry, sd1_1, sd1_4, sd1_7, sd1_8, d1, d7, d10, d11, d70, d8, d15a, d25, p4, qa17, sd2_5, sd3, qc19, qc20, qc18_1, qc18_2, qc18_3))
-```
 
-recodificamos la variable mas importante qc19, para que  no 0 si 1 y codificamos correctamente los NA: 
+data_country <- aggregate(as.numeric(contact_lgbti) ~ isocntry, 
+                          data = final_data, mean, na.rm = TRUE)
+
+map_data <- joinCountryData2Map(data_country, 
+                                joinCode = "ISO2", 
+                                nameJoinColumn = "isocntry")
+
+mapCountryData(map_data, 
+               nameColumnToPlot = "as.numeric(contact_lgbti)", 
+               mapTitle = "Contact with the LGTBI community per Country", 
+               catMethod = "quantiles", 
+               colourPalette = "Blues",
+               (colourPalette = brewer.pal(9, "Blues")),
+               mapRegion = "Europe")  
+```
 
 ```{r}
-filtered_survey <- filtered_survey |> 
-  mutate(qc19 = case_when(
-(qc19==1) ~ 1,
-(qc19==2) ~ 0,
-(qc19==3) ~ NA)) 
+# Interactive plot Religiosity vs Rainbow Indicator per Country
+p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocntry)) +
+  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
+  scale_color_viridis_d(option = "C") +  
+  theme_light(base_size = 14) + 
+  theme(
+    legend.position = "none", 
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
+    axis.text = element_text(size = 14),  
+    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
+    panel.grid.minor = element_blank(), 
+    plot.margin = margin(10, 10, 10, 10)  
+  ) +
+  labs(
+    title = "Religiosity vs Rainbow Indicator per Country",
+    x = "Percentage of Religiosity", 
+    y = "Rainbow Indicator"
+  )
 
+# ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 ```
-
-transformamos el resto de NA de las variables:
 
 ```{r}
-filtered_survey <- filtered_survey |> 
-  mutate(sd1_4 = if_else(sd1_4 == 4, NA, sd1_4)) 
+# Interactive plot GDP per capita vs Rainbow Indicator per Country
+p2 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry)) +
+  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
+  scale_color_viridis_d(option = "C") +  
+  theme_light(base_size = 14) + 
+  theme(
+    legend.position = "none", 
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
+    axis.text = element_text(size = 14),  
+    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
+    panel.grid.minor = element_blank(), 
+    plot.margin = margin(10, 10, 10, 10)  
+  ) +
+  labs(
+    title = "GDP per capita vs Rainbow Indicator per Country",
+    x = "GDP per capita", 
+    y = "Rainbow Indicator"
+  )
 
-filtered_survey <- filtered_survey |> 
-  mutate(sd1_7 = if_else(sd1_7 == 4, NA, sd1_7)) 
-
-filtered_survey <- filtered_survey |> 
-  mutate(sd1_8 = if_else(sd1_8 == 4, NA, sd1_8)) 
-
-filtered_survey <- filtered_survey |> 
-  mutate(d1 = if_else(d1 == 11 | d1 == 12, NA, d1)) 
-
-filtered_survey <- filtered_survey |> 
-  mutate(d7 = if_else(d7 == 15 | d7 == 16, NA, d7))
-
-filtered_survey <- filtered_survey |> 
-  mutate(d11 = if_else(d11 == 99 , NA, d11))
-
-filtered_survey <- filtered_survey |> 
-  mutate(d70 = if_else(d70 == 5, NA, d70))
-
-filtered_survey <- filtered_survey |> 
-  mutate(d8 = if_else(d8 == 00 | d8 == 01 | d8 == 98 | d8 == 99, NA, as.numeric(d8)))
-
-filtered_survey <- filtered_survey |> 
-  mutate(d25 = if_else(d25 == 4, NA, d25))
-
-filtered_survey <- filtered_survey |> 
-  mutate(qa17 = if_else(qa17 == 5, NA, qa17))
-
-filtered_survey <- filtered_survey |> 
-  mutate(sd1_1 = if_else(sd1_1 == 5, NA, sd1_1))
-
-filtered_survey <- filtered_survey |> 
-  mutate(sd2_5 = if_else(sd2_5 == 9 |sd2_5 == 10,  NA, sd2_5))
-
-filtered_survey <- filtered_survey |> 
-  mutate(sd3 = if_else(sd3 == 14 | sd3 == 15 | sd3 == 16,  NA, sd3))
-
-filtered_survey <- filtered_survey |> 
-  mutate(qc20 = if_else(qc20 == 3,  NA, qc20))
-
-filtered_survey <- filtered_survey |> 
-  mutate(qc18_1 = if_else(qc18_1 == 11 | qc18_1 == 12,  NA, qc18_1))
-
-filtered_survey <- filtered_survey |> 
-  mutate(qc18_2 = if_else(qc18_2 == 11 | qc18_2 == 12,  NA, qc18_1))
-
-filtered_survey <- filtered_survey |> 
-  mutate(qc18_3 = if_else(qc18_3 == 11 | qc18_3 == 12,  NA, qc18_1))
-
+# ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 
 ```
 
+```{r}
+#Distribution of the Political Ideology by Country
 
+colors_ue <- c("#0033A0", "#FFCC00", "#0066CC", "#FFFF00", "#3399FF", "#FFCC33", "#1E3A5F", "#FF9900", "#99CCFF") #esto lo he hecho para imitar un poco los colores de la UE pero no se si me convence, si os convence lo aplico a todo el resto
+
+colors_rep <- rep(colors_ue, length.out = length(unique(final_data$isocntry)))
+
+ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRUE), y = ideology, fill = isocntry)) +
+  geom_boxplot() +
+  theme_minimal() +
+  labs(title = "Distribution of the Political Ideology by Country", 
+       x = "Country", y = "Ideology (1 = Left, 10 = Right)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none") +
+  scale_fill_manual(values = colors_rep) 
+
+```
+
+### Bivariate analysis with target variable
+
+```{r}
+
+# Crear dataframe agregando el % de apoyo a derechos trans por país
+data_country <- aggregate(as.numeric(trans_name) ~ isocntry, data = final_data, mean, na.rm = TRUE)
+
+# Unir datos con el mapa mundial
+map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
+
+# Mapa
+mapCountryData(map_data, 
+               nameColumnToPlot = "as.numeric(trans_name)", 
+               mapTitle = "Support for change of Documents of the Trans Community per Country", 
+               catMethod = "quantiles", 
+               colourPalette = "Blues", 
+               mapRegion = "Europe")
+
+```
+
+```{r}
+ggplot(final_data, aes(x = as.factor(trans_name), y = ideology, fill = as.factor(trans_name))) + 
+  geom_boxplot(alpha = 0.6) + 
+  theme_minimal() + 
+  labs(title = "Political Ideology vs Support Trans Documents", 
+       x = "Support for the change of Documents of the Trans Community", 
+       y = "Ideology (1 = Left, 10 = Right)") + 
+  scale_fill_manual(values = c("0" = "red2", "1" = "olivedrab3")) + 
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) + 
+  theme(legend.position = "none")
+
+```
+
+```{r}
+ggplot(final_data, aes(x = as.factor(trans_name), y = religiosity_percent, fill = as.factor(trans_name))) +
+  geom_boxplot(alpha = 0.6) +
+  theme_minimal() +
+  labs(title = "Religiosity vs Support Trans Documents", 
+       x = "Support for the change of Documents of the Trans Community", 
+       y = "Percentage of Religiosity") + 
+  scale_fill_manual(values = c("0" = "red2", "1" = "olivedrab3")) + 
+  scale_x_discrete(labels = c("0" = "No", "1" = "Yes")) + 
+  theme(legend.position = "none")
+
+```
+
+### Other variables related to transgender persons
+
+```{r}
+# Boxplot 1: trans_child
+b1 <- ggplot(other_variables, 
+             aes(x = reorder(isocntry, child_love, FUN = median, decreasing = TRUE), 
+                                  y = child_love)) +
+  geom_boxplot(fill = "#FFBB78", outlier.colour = "red", outlier.fill = "red") +
+  labs(title = "How comfortable would you feel if one of your children was in love with a trans person?", 
+       x = "Country", y = "Support Level") +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+
+# Boxplot 2: trans_pol
+b2 <- ggplot(other_variables, 
+             aes(x = reorder(isocntry, trans_pol, FUN = median, decreasing = TRUE), 
+                                  y = trans_pol)) +
+  geom_boxplot(fill = "#AEC7E8", outlier.colour = "red", outlier.fill = "red") +
+  labs(title = "Trans people in high political positions", 
+       x = "Country", y = "Support Level") +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 1),
+    axis.title = element_text(size = 12, face = "bold")) +
+  theme_minimal()
+
+# Boxplots combined
+b <- b1 / b2 
+b
+```
+
+### Mice imputation for ideology
+
+We look at the NA distribution to see which variables have more missing values.
+
+```{r}
+colSums(is.na(final_data))
+```
+
+It can be seen that the ideology variable is the most appropriate variable to impute as its number of NA represents a significant percentage of the total observations.
+
+```{r}
+mice_data <- final_data |> 
+  mutate(across(where(is.labelled), as_factor),
+         ideology = as.numeric(ideology)) |>
+  select(-caseid, -religiosity_percent) #not useful for the mice imputation
+```
+
+There are factor and numerical variables, so the best option is to test with Random Forest and Pmm methods.
+
+```{r}
+imputed_comparison <- data.frame(
+  original = mice_data$ideology,
+  imputed_rf = complete(mice(mice_data, method = "rf", 
+                             m = 3, maxit = 3, 
+                             seed = 123))$ideology,
+  imputed_pmm = complete(mice(mice_data, method = "pmm",
+                              m = 3, maxit = 3, 
+                              seed = 123))$ideology)
+```
+
+The m and the maxit arguments are = 3 to reduce loading time without losing so much information.
+
+The next step is to plot the results to compare the resulting distributions: 
+
+```{r}
+# Arguments for the plot 
+methods <- c("original", "imputed_rf" , "imputed_pmm")
+titles <- c("Distribution of the Age Variable",
+           "Random Forest-imputed Distribution",
+            "PMM-imputed Distribution")
+colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
+
+
+# Long format 
+data_imputed_long <- imputed_comparison |>
+  pivot_longer(cols = all_of(methods), names_to = "method", 
+                values_to = "value") |>
+  mutate(title = factor(method, levels = methods, labels = titles))
+
+
+# Distributions comparison 
+plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "black", position = "identity") +
+  facet_wrap(~ title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+plot_mice
+```
+
+## Explaining Cross-Country Differences
+
+## Predictive model
+
+## Conclusions
