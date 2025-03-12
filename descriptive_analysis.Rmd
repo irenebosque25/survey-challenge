@@ -23,6 +23,7 @@ library(ggrepel)
 library(plotly)
 library(rworldmap)
 library(janitor)
+library(RColorBrewer)
 ```
 
 ## Data cleaning copied from the script
@@ -173,7 +174,6 @@ filtered_survey <- filtered_survey |>
     sd3 %in% c(1, 3, 4) ~ "Christians", 
     sd3 == 2 ~ "Orthodox Chrsitian", 
     sd3 %in% c(6, 7, 8) ~ "Muslims", 
-    sd3 == 5 ~ "Jewish", #he añadido judios es que me parecia raro añadir orthodox christians como una separada pero no judios pero bueno se puede cambiar
     sd3 %in% c(10, 11, 14) ~ "Other religions", 
     sd3 %in% c(12, 13) ~ "Not religious", 
     TRUE ~ NA),
@@ -227,16 +227,6 @@ filtered_survey <- filtered_survey %>%
 
 # Country names: DE-E and DE-W were problems 
 
-filtered_survey <- filtered_survey %>% 
-  mutate(country = country_name(isocntry, to = "simple", 
-                                verbose = TRUE, poor_matches = TRUE),
-         isocntry = countrycode::countrycode(country, origin = "country.name",
-                                                destination = "iso2c"))
-  
-individual_data <- filtered_survey |> 
-  select(caseid, isocntry, trans_name, female, age, religion, 
-         marital_status, personal_satis, ideology, 
-         contact_lgbti, social_class, occupation)
 ```
 
 ```{r}
@@ -255,7 +245,7 @@ final_data <- individual_data |>
 
 # How comfortable you would feel if one of your children was in love with a trans person
 
-other_variables <- other_variables |> 
+other_variables <- survey |> 
   mutate(child_love = if_else(qc13_11 > 10, NA, qc13_11))
 
 # Trans in a high political position
@@ -281,7 +271,7 @@ other_variables <- other_variables |>
                                                 destination = "iso2c"))
   
 other_variables <- other_variables |> 
-  select(bills, child_love, trans_pol, trans_school, isocntry)
+  select(child_love, trans_pol, trans_school, isocntry)
 
 ```
 
@@ -290,6 +280,7 @@ other_variables <- other_variables |>
 ```{r}
 plot_intro(final_data)
 ```
+Before diving into an in-depth analysis of the dataset, we first examine its key characteristics using this plot_intro. We observe that 52.9% of the dataset consists of discrete variables, while 47.1% are continuous. Additionally, 70.4% of the rows are complete, meaning they contain no missing values in any variable. The total percentage of missing values is minimal, accounting for just 2.4%.
 
 ```{r}
 str(final_data)
@@ -301,7 +292,7 @@ summary(final_data)
 
 The dataset includes both individual-level variables, which capture personal characteristics and opinions, and country-level contextual variables, which help explain cross-country differences in support for transgender rights.
 
-### **Individual-Level Variables:**
+#### **Individual-Level Variables:**
 
 These variables reflect personal attributes, experiences, and attitudes:
 
@@ -315,21 +306,21 @@ These variables reflect personal attributes, experiences, and attitudes:
 
 -   **age**: Ranges from 15 to 98 years, with a median age of 53. The youngest 25% of respondents are aged 37 or younger, while the oldest 25% are 66 or older. This indicates a relatively older sample, which is relevant for analyzing attitudes, as previous studies have highlighted generational differences in the acceptance of LGBTI rights.
 
--   **religion**: The majority of religious respondents identify as Christians (15,412), Orthodox Christians (4,016), and Muslims (392), while 21% of the sample report no religious affiliation.
+-   **religion**: captures respondents' religious affiliations, showing that a majority identify as Christian, with a smaller proportion reporting no religious affiliation. 
 
--   **marital_status**: Respondents’ marital status.In our sample, more than half of participants are married (53.5%), followed by 27.8% who are single.This allows us to assess how family experiences might influence attitudes toward the transgender community.
+-   **marital_status**: reflects participants’ relationship status, which may provide insight into how family experiences shape attitudes toward the transgender community.
 
 -   **personal_satis**: Categorical variable representing personal life satisfaction, which could be linked to more open or restrictive attitudes.
 
--   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions. However, 25% of the sample holds an ideology of 7 or higher (more progressive), while another 25% falls at 4 or lower (more conservative).
+-   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions. 
 
--   **contact_lgbti**: Prior contact with LGBTI individuals, a crucial factor in reducing prejudice. 11,422 participants report having contact with the LGBTI community, while 15,522 do not.
+-   **contact_lgbti**: assesses prior exposure to LGBTI individuals, an important factor in reducing prejudice, with a division between those who have had contact and those who have not. 
 
 -   **social_class**: Self-perceived social class, indicating the respondent’s socioeconomic context.
 
--   **occupation**: Employment status, allowing us to explore the influence of workplace environments. The majority of respondents are retired (8,791) or employed (6,447).Unemployment affects 2,662 participants, while 1,676 are students.
+-   **occupation**: Employment status, allowing us to explore the influence of workplace environments. 
 
-### **Country-Level Contextual Variables:**
+#### **Country-Level Contextual Variables:**
 
 In addition to individual-level factors, we incorporate aggregated national indicators to better understand how structural and policy differences influence support for transgender rights.
 
@@ -344,10 +335,6 @@ In addition to individual-level factors, we incorporate aggregated national indi
 -   **religiosity_percent**: Percentage of the population that identifies as religious, which is crucial for exploring cultural and religious influences on attitudes.Values range from 21.49% to 100%, with a median of 81.16%.
 
 ```{r}
-table(final_data$trans_name, final_data$female)
-```
-
-```{r}
 
 #seleccionamos variables numericas y a nivel país
 corr_data <- final_data |> 
@@ -358,14 +345,13 @@ corr_matrix <- cor(corr_data, use = "complete.obs")
 plot_correlation(corr_matrix)
 
 ```
-
 This correlation matrix highlights that support for transgender rights is significantly shaped by economic, cultural, and policy-related factors. Higher economic development, lower inequality, and strong LGBTI legal protections are associated with greater acceptance, while religiosity, conservatism, and age tend to correlate with lower support.
 
-### Categorical variables
+### Distribution of the individual variables
 
-Distribution of the categorical variables in all the dataset
+First of all, we proceed to analyze the distribution of the individual variables in our dataset:
 
-```{r}
+```{r, fig.width=12}
 font_add_google("Voces", "voces")
 showtext_auto()
 
@@ -438,6 +424,14 @@ g
 
 ```
 
+One of the first aspects to analyze is the distribution of categorical variables in the dataset, which, as previously noted, account for 52.9% of the total data. The set of bar charts provides an overview of key individual characteristics, highlighting patterns in religious identification, marital status, personal satisfaction, social class, occupation, and contact with the LGBTI community.
+
+The majority of respondents identify as Christian, while a notable percentage report no religious affiliation, and smaller proportions belong to other religious groups such as Muslims and Orthodox Christians. In terms of marital status, the most represented group consists of married individuals, followed by single respondents, while divorced and widowed participants form smaller segments of the sample.
+
+Regarding personal satisfaction, a significant majority report being satisfied with their lives, whereas only a small minority express dissatisfaction. The self-reported social class distribution indicates that most respondents identify as middle or working class, while a much smaller portion considers themselves part of the high class. Similarly, the occupation distribution reveals that most individuals are either employed or retired, while students, the self-employed, and the unemployed represent smaller proportions.
+
+Finally, contact with the LGBTI community reveals a notable divide, with a substantial portion of respondents reporting no contact with LGBTI individuals, while a significant number indicate prior interaction. This variable is particularly relevant, as previous research suggests that personal exposure to LGBTI individuals can influence attitudes toward their rights. 
+
 ```{r}
 ggplot(final_data, aes(x = age)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "steelblue", alpha = 0.6) +
@@ -446,8 +440,14 @@ ggplot(final_data, aes(x = age)) +
   labs(title = "Age Distribution", x = "Age", y = "Density")
 
 ```
+On the other hand, we observe the age distribution of the respondents in the dataset. The distribution appears right-skewed, indicating that there are fewer younger participants and a greater proportion of middle-aged and older respondents. The density increases gradually, peaking around 50 to 70 years old, before sharply declining beyond 75 years.The smoother density curve (red line) confirms the overall trend, highlighting multiple local peaks, particularly around 30, 50, and 70 years old, before declining toward the upper age limit of the sample.
+
+Overall, the distribution supports the earlier summary statistics, where the median age was reported at 53 years, with the youngest quartile at 37 years or younger and the oldest quartile at 66 years or older. The relatively low representation of younger individuals could influence the overall attitudinal patterns observed in the study.
+
 
 ### Variable Distribution by Country
+
+Next, we analyze the contextual differences between the countries surveyed in the dataset.
 
 ```{r}
 #Contact with LGTBI community by country
@@ -471,18 +471,29 @@ ggplot(final_data, aes(x = factor(isocntry, levels = country_order$isocntry), fi
 
 ```{r}
 
-data_country <- aggregate(as.numeric(contact_lgbti) ~ isocntry, data = final_data, mean, na.rm = TRUE)
+data_country <- final_data |> 
+  filter(!is.na(contact_lgbti)) |> 
+  group_by(isocntry) |> 
+  summarise(no_contact_prop = mean(contact_lgbti == "No contact")) |> 
+  mutate(contact_category = ifelse(no_contact_prop < 0.5, "Majority Contact", "Majority No Contact"))
 
 map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
 
+color_palette <- c("Majority Contact" = "olivedrab3", "Majority No Contact" = "red2")
+
 mapCountryData(map_data, 
-               nameColumnToPlot = "as.numeric(contact_lgbti)", 
-               mapTitle = "Contact with the LGTBI community per Country", 
-               catMethod = "quantiles", 
-               colourPalette = "Blues", #puedo poner otra paleta si no os gusta(colourPalette = brewer.pal(9, "Blues")))
-               mapRegion = "Europe")  
+               nameColumnToPlot = "contact_category", 
+               mapTitle = "Predominance of Contact with the LGBTI Community by Country",
+               catMethod = "categorical",
+               colourPalette = color_palette,
+               mapRegion = "Europe")
 
 ```
+These two visualizations illustrate the distribution of contact with the LGBTI community across countries, highlighting significant regional differences in social exposure to LGBTI individuals.
+
+The first bar chart presents the proportion of respondents in each country who report having contact with LGBTI individuals (green) versus those who do not (red), with a small portion of missing responses (gray). Countries are arranged from left to right based on decreasing levels of respondents lacking contact with the LGBTI community. Romania, Bulgaria, Poland, and several other Eastern European countries show the highest levels of non-contact, while the Netherlands, Sweden, and other Western and Northern European nations report the highest levels of contact. This suggests a strong regional divide in familiarity with LGBTI individuals.
+
+The second map visually reinforces this divide, categorizing countries based on whether a majority of respondents reported having contact with the LGBTI community. Western and Northern European countries (in green) generally show higher exposure with the exception of Portugal, while Eastern and Southern European countries (in red) report lower levels of contact.
 
 ```{r}
 #Interactive Plot Religiosity vs Rainbow Indicator per Country
@@ -504,7 +515,7 @@ p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocn
     y = "Rainbow Indicator"
   )
 
-# ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+#ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 ```
 
 ```{r}
@@ -527,7 +538,7 @@ p2 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry)) +
     y = "Rainbow Indicator"
   )
 
-# ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+#ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 
 ```
 
@@ -564,7 +575,7 @@ mapCountryData(map_data,
                nameColumnToPlot = "as.numeric(trans_name)", 
                mapTitle = "Support for change of Documents of the Trans Community per Country", 
                catMethod = "quantiles", 
-               colourPalette = "Blues", 
+               colourPalette = brewer.pal(9, "Blues"), 
                mapRegion = "Europe")
 
 ```
