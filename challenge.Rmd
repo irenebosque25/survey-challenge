@@ -151,8 +151,7 @@ filtered_survey <- survey |>
   mutate(trans_name = case_when(
     qc19==1 ~ 1,
     qc19==2 ~ 0,
-    qc19==3 ~ NA),
-    trans_name = factor(trans_name)) 
+    qc19==3 ~ NA)) 
 
 # Recode gender
 filtered_survey <- filtered_survey |> 
@@ -507,7 +506,7 @@ The second map visually reinforces this divide, categorizing countries based on 
 
 ```{r}
 #Interactive Plot GDP per capita vs Rainbow Indicator per Country
-western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "ES", "PT", "IT", "GB")
+western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "ES", "PT", "IT", "GB", "MT")
 eastern <- c("BG", "CZ", "EE", "HU", "LT", "LV", "PL", "RO", "RU", "SK", "SI", "HR", "UA", "GR", "CY")
 
 ggplot(final_data, aes(x = gdp_pc, y = rain_ind, label = isocntry)) +
@@ -519,7 +518,7 @@ ggplot(final_data, aes(x = gdp_pc, y = rain_ind, label = isocntry)) +
   scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3", "Other" = "gray")) + 
   theme_minimal(base_size = 14) +
   labs(
-    title = "GDP per capita vs Religiosity Percentage per Country",
+    title = "GDP per capita vs Rainbow Indicator per Country",
     x = "GDP per capita",
     y = "Religiosity Percentage",
     color = "Region"
@@ -539,21 +538,18 @@ ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, label = isocntry))
     isocntry %in% western_northern ~ "Western/Northern",
     isocntry %in% eastern ~ "Eastern",
     TRUE ~ "Other")), size = 4, shape = 21, stroke = 1, fill = "white") +  
-  geom_text(size = 3, hjust = -0.6) +  # Ajusta el texto a la derecha
+  geom_text(size = 3, hjust = -0.6) +  
   scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3", "Other" = "gray")) + 
   theme_minimal(base_size = 14) +
   labs(
-    title = "GDP per capita vs Religiosity Percentage per Country",
-    x = "GDP per capita",
-    y = "Religiosity Percentage",
+    title = "Religiosity vs Rainbow Indicator per Country",
+    x = "Religiosity",
+    y = "Rainbow Indicator",
     color = "Region"
   ) +
   theme(
     plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
-    legend.position = "top",
-    panel.grid.major = element_line(color = "grey80", linetype = "dashed"),
-    panel.grid.minor = element_blank()
-  )
+    legend.position = "top")
 
 ```
 
@@ -733,15 +729,11 @@ plot_mice
 
 ## Explaining Cross-Country Differences
 
-First of all, we performed a brief data preparation to enhance stability and model performance. First, we transformed GDP per capita with a natural logarithm to reduce the asymmetry of its distribution and make nonlinear relationships with other variables more manageable. Then, we standardized all numerical variables, except those starting with "case" or "trans", to ensure they have a mean of zero and a standard deviation of one, which facilitates comparison and prevents some variables from dominating the model due to their magnitudes. Finally, we reassigned the reference level of the categorical variable on contact with LGBTI people, setting "No contact" as the base category.
+First of all, we performed a brief data preparation to enhance stability and model performance. First, we transformed GDP per capita with a natural logarithm to reduce the asymmetry of its distribution and make nonlinear relationships with other variables more manageable. Then, we reassigned the reference level of the categorical variable on contact with LGBTI people, setting "No contact" as the base category.
 
 ```{r}
 final_data <- final_data |> 
   mutate(gdp_pc = log(gdp_pc))
-
-final_data <- final_data  |> 
-  mutate(across(where(is.numeric) & !(starts_with("case") |
-                                        starts_with("trans") | ), scale))
 
 final_data$contact_lgbti <- relevel(final_data$contact_lgbti, ref = "No contact")
 ```
@@ -749,20 +741,20 @@ final_data$contact_lgbti <- relevel(final_data$contact_lgbti, ref = "No contact"
 Then, we check for the multicollinearity in our model:
 
 ```{r}
-model <- glm(trans_name ~ age + 
+model <- glm(trans_name ~ scale(age) + 
                female + 
                religion + 
                occupation + 
                marital_status + 
                personal_satis +
                contact_lgbti +
-               ideology +
+               scale(ideology) +
                social_class +
-               gdp_pc +
+               scale(gdp_pc) +
                self_determination + 
-               gini + 
-               rain_ind + 
-               religiosity_percent, 
+               scale(gini) + 
+               scale(rain_ind) + 
+               scale(religiosity_percent), 
              family = "binomial", data = final_data)
 
 summary(model)
@@ -778,14 +770,14 @@ Next, we test different models to identify key factors influencing support for t
 
 ```{r}
 model2 <- glmer(trans_name ~ 
-                  age + 
+                  scale(age) + 
                   female + 
                   religion +
                   occupation +
                   marital_status + 
                   personal_satis +
                   contact_lgbti +
-                  ideology +
+                  scale(ideology) +
                   social_class +
                   (1|isocntry), 
                 family = "binomial", 
@@ -794,17 +786,17 @@ summary(model2)
 
 
 model3 <- glmer(trans_name ~ 
-                  age + 
-                  I(age^2) +
+                  scale(age) + 
+                  I(scale(age)^2) +
                   female + 
                   occupation +
-                  religion*religiosity_percent + 
-                  marital_status*religiosity_percent + 
+                  religion*scale(religiosity_percent) + 
+                  marital_status*scale(religiosity_percent) + 
                   personal_satis*self_determination +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   contact_lgbti*self_determination +
-                  ideology*gdp_pc +
-                  social_class*gini +
+                  scale(ideology)*scale(gdp_pc) +
+                  social_class*scale(gini) +
                   (1|isocntry), 
                 family = "binomial", 
                 data = final_data)
@@ -816,20 +808,20 @@ We started with model2, a generalized linear mixed-effects model that includes a
 In model4, we extended the complexity further by adding additional interaction terms and quadratic terms, similar to model3. This model includes interactions like religion and religiosity percent, personal satisfaction and self-determination, and contact with LGBTI people with variables such as rain index and self-determination. We also included the interaction between ideology and GDP per capita and social class with the Gini index.
 ```{r}
 model4 <- glmer(trans_name ~ 
-                  age + 
-                  I(age^2) + 
+                  scale(age) + 
+                  I(scale(age)^2) + 
                   female + 
                   religion +
                   occupation + 
-                  religion:religiosity_percent + 
+                  religion:scale(religiosity_percent) + 
                   marital_status + 
                   personal_satis + 
                   personal_satis:self_determination +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   contact_lgbti:self_determination +
-                  ideology +
-                  ideology:gdp_pc +
-                  social_class*gini +
+                  scale(ideology) +
+                  scale(ideology):scale(gdp_pc) +
+                  social_class*scale(gini) +
                   (1|isocntry), 
                 family = "binomial", 
                 data = final_data)
@@ -843,20 +835,20 @@ In model5, we included additional variables and interactions, while also refinin
 
 ```{r}
 model5 <- glmer(trans_name ~ 
-                  age +
-                  I(age ^ 2) + 
+                  scale(age) +
+                  I(scale(age) ^ 2) + 
                   female + 
                   occupation + 
                   religion +
-                  religion:religiosity_percent + 
+                  religion:scale(religiosity_percent) + 
                   marital_status + 
                   personal_satis +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   contact_lgbti:self_determination +
                   ideology + 
-                  ideology:gdp_pc +
+                  ideology:scale(gdp_pc) +
                   social_class +
-                  gini +
+                  scale(gini) +
                   (1|isocntry), 
                 family = "binomial", 
                 data = final_data)
@@ -870,17 +862,17 @@ In model6, we further refined the model by removing non-significant variables fr
 
 ```{r}
 model6 <- glmer(trans_name ~ 
-                  age +
-                  I(age ^ 2) + 
+                  scale(age) +
+                  I(scale(age) ^ 2) + 
                   female + 
                   occupation +
                   religion +
-                  religion:religiosity_percent + 
+                  religion:scale(religiosity_percent) + 
                   marital_status + 
                   personal_satis +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   ideology + 
-                  ideology:gdp_pc +
+                  ideology:scale(gdp_pc) +
                   (1|isocntry), 
                 family = "binomial",
                 data = final_data)
@@ -892,16 +884,16 @@ After evaluating the results, we found that marital status was not significant i
 In model7, we further simplified the model by removing marital status based on the previous findings.
 ```{r}
 model7 <- glmer(trans_name ~ 
-                  age +
-                  I(age ^ 2) + 
+                  scale(age) +
+                  I(scale(age) ^ 2) + 
                   female + 
                   occupation +
                   religion +
-                  religion:religiosity_percent + 
+                  religion:scale(religiosity_percent) + 
                   personal_satis +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   ideology + 
-                  ideology:gdp_pc +
+                  ideology:scale(gdp_pc) +
                   (1|isocntry), 
                 family = "binomial", 
                 data = final_data)
@@ -911,17 +903,17 @@ In model8, we introduced random slopes alongside random intercepts to allow for 
 
 ```{r}
 model8 <- glmer(trans_name ~ 
-                  age +
+                  scale(age) +
                   I(age ^ 2) + 
                   female + 
                   occupation +
                   religion +
-                  religion:religiosity_percent + 
+                  religion:scale(religiosity_percent) + 
                   personal_satis +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   ideology + 
-                  ideology:gdp_pc +
-                  (1 + age + female + ideology|isocntry), 
+                  ideology:scale(gdp_pc) +
+                  (1 + scale(age) + female + scale(ideology)|isocntry), 
                 family = "binomial", 
                 data = final_data)
 summary(model8)
@@ -935,20 +927,20 @@ The model includes additional predictors like female, occupation, and religion i
 
 ```{r}
 step_model <- glmer(trans_name ~ 
-                  age + 
-                  I(age^2) +
+                  scale(age) + 
+                  I(scale(age)^2) +
                   female + 
                   occupation +
-                  religion*religiosity_percent + 
-                  marital_status*religiosity_percent + 
+                  religion*scale(religiosity_percent) + 
+                  marital_status*scale(religiosity_percent) + 
                   personal_satis*self_determination +
-                  contact_lgbti*rain_ind +
+                  contact_lgbti*scale(rain_ind) +
                   contact_lgbti*self_determination +
-                  ideology*gdp_pc +
-                  social_class*gini +
-                  (1 + age + 
+                  scale(ideology)*scale(gdp_pc) +
+                  social_class*scale(gini) +
+                  (1 + scale(age) + 
                      female +
-                     ideology
+                     scale(ideology)
                      |isocntry), 
                 family = "binomial",
                 data = final_data)
@@ -959,18 +951,18 @@ summary(step_model)
 
 ```{r}
 final_model <- glmer(trans_name ~ 
-                      age + 
-                      I(age^2) +
+                      scale(age) + 
+                      I(scale(age)^2) +
                       female + 
                       occupation +
-                      religion*religiosity_percent +  
+                      religion*scale(religiosity_percent) +  
                       personal_satis +
-                      contact_lgbti*rain_ind +
+                      contact_lgbti*scale(rain_ind) +
                       self_determination +
-                      ideology*gdp_pc +
-                      (1 + age + 
+                      scale(ideology)*scale(gdp_pc) +
+                      (1 + scale(age) + 
                          female +
-                         ideology
+                         scale(ideology)
                        |isocntry), 
                     family = "binomial",
                     data = final_data)
