@@ -232,7 +232,7 @@ filtered_survey <- filtered_survey %>%
 ```{r}
 #Merge
 
-final_data <- individual_data |> 
+final_data <- filtered_survey |> 
   left_join(rainbow, by = c("isocntry" = "country_iso")) |> 
   left_join(trans, by = c("isocntry" = "country_iso")) |> 
   left_join(economic_indicators, by = c("isocntry" = "country_iso")) |> 
@@ -495,12 +495,44 @@ The first bar chart presents the proportion of respondents in each country who r
 
 The second map visually reinforces this divide, categorizing countries based on whether a majority of respondents reported having contact with the LGBTI community. Western and Northern European countries (in green) generally show higher exposure with the exception of Portugal, while Eastern and Southern European countries (in red) report lower levels of contact.
 
+
+
+```{r}
+#Interactive Plot GDP per capita vs Rainbow Indicator per Country
+western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "UK", "ES", "PT", "IT", "GB")
+eastern <- c("BG", "CZ", "EE", "HU", "LT", "LV", "PL", "RO", "RU", "SK", "SI", "HR", "UA", "GR", "CY")
+
+p1 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry, 
+                             color = ifelse(isocntry %in% western_northern, "Western/Northern",
+                                            ifelse(isocntry %in% eastern, "Eastern", NA)))) +
+  geom_point(size = 3, alpha = 0.8) +
+  theme_light(base_size = 14) + 
+  theme(
+    legend.title = element_blank(),  # Eliminar título de la leyenda
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
+    axis.text = element_text(size = 14),  
+    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
+    panel.grid.minor = element_blank(), 
+    plot.margin = margin(10, 10, 10, 10)  
+  ) +
+  labs(
+    title = "GDP per capita vs Rainbow Indicator per Country",
+    x = "GDP per capita", 
+    y = "Rainbow Indicator"
+  )
+
+ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+
+```
+
+
 ```{r}
 #Interactive Plot Religiosity vs Rainbow Indicator per Country
-p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocntry)) +
-  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
-  scale_color_viridis_d(option = "C") +  
-  theme_light(base_size = 14) + 
+p2 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocntry,
+                            color = ifelse(isocntry %in% western_northern, "Western/Northern",
+                                            ifelse(isocntry %in% eastern, "Eastern", NA)))) +
+  geom_point(size = 3, alpha = 0.8) + 
+  theme_light(base_size = 14) +
   theme(
     legend.position = "none", 
     plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
@@ -515,39 +547,12 @@ p1 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocn
     y = "Rainbow Indicator"
   )
 
-#ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
+ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 ```
 
-```{r}
-#Interactive Plot GDP per capita vs Rainbow Indicator per Country
-p2 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry)) +
-  geom_point(aes(color = isocntry), size = 3, alpha = 0.8) + 
-  scale_color_viridis_d(option = "C") +  
-  theme_light(base_size = 14) + 
-  theme(
-    legend.position = "none", 
-    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
-    axis.text = element_text(size = 14),  
-    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
-    panel.grid.minor = element_blank(), 
-    plot.margin = margin(10, 10, 10, 10)  
-  ) +
-  labs(
-    title = "GDP per capita vs Rainbow Indicator per Country",
-    x = "GDP per capita", 
-    y = "Rainbow Indicator"
-  )
-
-#ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
-
-```
 
 ```{r}
 #Distribution of the Political Ideology by Country
-
-colors_ue <- c("#0033A0", "#FFCC00", "#0066CC", "#FFFF00", "#3399FF", "#FFCC33", "#1E3A5F", "#FF9900", "#99CCFF") #esto lo he hecho para imitar un poco los colores de la UE pero no se si me convence, si os convence lo aplico a todo el resto
-
-colors_rep <- rep(colors_ue, length.out = length(unique(final_data$isocntry)))
 
 ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRUE), y = ideology, fill = isocntry)) +
   geom_boxplot() +
@@ -556,21 +561,26 @@ ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRU
        x = "Country", y = "Ideology (1 = Left, 10 = Right)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "none") +
-  scale_fill_manual(values = colors_rep) 
+  scale_fill_manual(values = colorRampPalette(brewer.pal(9, "Blues"))(28)) 
 
 ```
+This boxplot visualization illustrates the distribution of political ideology across countries, measured on a 1 to 10 scale, where 1 represents left-wing views and 10 represents right-wing views. The countries are arranged from left to right based on their median ideological positioning, with lighter shades representing more left-leaning countries and darker shades indicating more right-leaning ones.
+
+Almost every Western and Northern European countries, such as Austria (AT), Belgium (BE), Denmark (DK), and Finland (FI), show a more center median ideology, with a broader distribution of responses. In contrast, Eastern and Southern European countries, including Slovakia (SK), Hungary (HU), Latvia (LV), and Romania (RO), display higher median scores, indicating a more right-leaning population. 
+
+However, Spain is particularly interesting because, although its median ideology is similar to that of many other countries, the overall distribution is skewed to the left, meaning a larger proportion of respondents identify as left-wing compared to right-wing. This suggests that while the central tendency remains balanced, there is a stronger leftist presence in the country.
+
+In contrast, some countries like the Czech Republic (CZ), Cyprus (CY), and Estonia (EE) exhibit the opposite trend. Their median scores remain relatively moderate, yet the distribution skews towards the right, implying a larger proportion of right-leaning individuals compared to left-leaning ones. 
+
 
 ### Bivariate Analysis with Target Variable
 
 ```{r}
 
-# Crear dataframe agregando el % de apoyo a derechos trans por país
 data_country <- aggregate(as.numeric(trans_name) ~ isocntry, data = final_data, mean, na.rm = TRUE)
 
-# Unir datos con el mapa mundial
 map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
 
-# Mapa
 mapCountryData(map_data, 
                nameColumnToPlot = "as.numeric(trans_name)", 
                mapTitle = "Support for change of Documents of the Trans Community per Country", 
@@ -579,6 +589,12 @@ mapCountryData(map_data,
                mapRegion = "Europe")
 
 ```
+
+This choropleth map illustrates the level of support for transgender individuals' right to change their official documents, our target variable, across different European countries. The color gradient, ranging from light blue (low support) to dark blue (high support), visually represents the variation in attitudes toward this issue.
+
+Western and Northern European countries, such as Spain, Portugal, the Netherlands, Belgium, and the Nordic countries, exhibit the highest levels of support, as indicated by the darkest shades of blue. This pattern aligns with broader trends of progressive LGBTI policies and strong legal protections in these regions. France and Germany show similarly high levels of support, though not as strong. 
+
+In contrast, Central and Eastern European countries, including Poland, Hungary, and several Balkan states, show significantly lower levels of support, as reflected by the lighter shades. These countries tend to have more conservative social attitudes and restrictive legal frameworks regarding transgender rights. Italy stands out with surprisingly low support compared to other Western European nations. This suggests that despite being a major Western European country, Italy remains more conservative on transgender issues.
 
 ```{r}
 ggplot(final_data, aes(x = as.factor(trans_name), y = ideology, fill = as.factor(trans_name))) + 
@@ -605,6 +621,13 @@ ggplot(final_data, aes(x = as.factor(trans_name), y = religiosity_percent, fill 
   theme(legend.position = "none")
 
 ```
+These two boxplots examine the relationship between support for transgender individuals' right to change their official documents and two factors: political ideology and religiosity. 
+
+In the first boxplot (Political Ideology vs. Support for Trans Documents), the median ideology score is similar across groups, meaning that those who support (green) and oppose (red) document changes have roughly the same central tendency. However, a key difference emerges in the distribution of responses: those who oppose the right to change documents have a longer right-leaning tail, indicating a higher presence of strongly right-wing individuals in this group. In contrast, supporters have a more centralized distribution, meaning they are not necessarily strongly left-wing, but rather clustered around moderate-left to centrist views. The NA category (gray) also has a similar median but a broader spread, covering both left- and right-leaning respondents more evenly.
+
+The second boxplot (Religiosity vs. Support for Trans Documents) presents a slightly different pattern. Here, the median religiosity score is slightly higher for those who oppose document changes compared to supporters. However, unlike political ideology, the distribution of religiosity is more similar across groups, meaning that while opposition to trans rights is somewhat more frequent among more religious individuals, this is not highly significant
+
+In summary, while there are some observable differences in political ideology and religiosity between those who support or oppose transgender rights, they are not highly significant. The distributions indicate that attitudes toward transgender document changes are influenced by multiple factors, with ideology and religiosity playing a role but not being the sole determinants.
 
 ## Questions related with trans people
 
