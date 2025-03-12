@@ -7,6 +7,7 @@ library(countrycode)
 library(janitor)
 library(lme4)
 library(car)
+library(olsrr)
 
 # Religiosity-----------------------------------------------
 religiosity <- read_dta("data/replication_data.dta")
@@ -220,6 +221,9 @@ final_data <- individual_data |>
 
 # Models----------------------------------------------------
 
+final_data <- final_data |> 
+  mutate(gdp_pc = log(gdp_pc))
+
 final_data$contact_lgbti <- relevel(final_data$contact_lgbti, ref = "No contact")
 
 model <- glm(trans_name ~ age + 
@@ -230,15 +234,19 @@ model <- glm(trans_name ~ age +
                personal_satis +
                contact_lgbti +
                ideology +
-               social_class, 
+               social_class +
+               gdp_pc +
+               self_determination + 
+               gini + 
+               rain_ind + 
+               religiosity_percent, 
              family = "binomial", data = final_data)
 
 summary(model)
 
 exp(coef(model))
 
-vif(model) # We do not have multicollinearity between the individual variables 
-
+vif(model) # We do not have multicollinearity between the individual variables and collective variables
 
 # We are going to scale the variables because we are having troubles with the
 # identifiability of the model 
@@ -341,7 +349,7 @@ model6 <- glmer(trans_name ~
                   ideology + 
                   ideology:gdp_pc +
                   (1|isocntry), 
-                family = "binomial", 
+                family = "binomial",
                 data = final_data)
 summary(model6)
 
@@ -383,3 +391,59 @@ summary(model8)
 
 lme4::ranef(model8) %>% # This is for extracting random intercepts and slopes
   str # ¿Como sabemos cual es cual?
+
+
+
+step_model <- glmer(trans_name ~ 
+                  age + # Cuando incluyes tanto age como age^2, 
+                    #el término lineal (age) y el término cuadrático (age^2) trabajan
+                    # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
+                    # no la vamos a eliminar
+                  I(age^2) +
+                  female + 
+                  occupation +
+                  religion*religiosity_percent + 
+                  marital_status*religiosity_percent + 
+                  personal_satis*self_determination +
+                  contact_lgbti*rain_ind +
+                  contact_lgbti*self_determination +
+                  ideology*gdp_pc +
+                  social_class*gini +
+                  (1 + age + 
+                     female +
+                     ideology
+                     |isocntry), 
+                family = "binomial",
+                data = final_data)
+
+summary(step_model)
+
+
+final_model <- glmer(trans_name ~ 
+                      age + # Cuando incluyes tanto age como age^2, 
+                      #el término lineal (age) y el término cuadrático (age^2) trabajan
+                      # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
+                      # no la vamos a eliminar
+                      I(age^2) +
+                      female + 
+                      occupation +
+                      religion*religiosity_percent +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
+                      personal_satis +
+                      contact_lgbti*rain_ind +
+                      self_determination +
+                      ideology*gdp_pc +
+                      (1 + age + 
+                         female +
+                         ideology
+                       |isocntry), 
+                    family = "binomial",
+                    data = final_data)
+
+summary(final_model)
+
+lme4::ranef(model8) %>% # This is for extracting random intercepts and slopes
+  str # ¿Como sabemos cual es cual?
+
+# Me quedaría con el final_model porque, a  pesar de que tiene más AIC que el step_model,
+# el step model reduce esta medida de forma espuria, es decir, estamos añadiendo más variables que no
+# resultan significativas y el AIC se reduce, pero sin añadir valor explicativo real al modelo.
