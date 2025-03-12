@@ -65,4 +65,6 @@ stargazer(model_1,
             "Interaction between participant having contact to LGBTI community and Rainbow Europe Country Indicator", 
             "Interaction between ideology of a participant and GDP (%) ofa country",        
           out="models.txt")
+)
+
 ```
