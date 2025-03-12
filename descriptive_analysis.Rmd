@@ -135,7 +135,7 @@ survey <- read_dta("data/ZA7575.dta")
 survey <- survey |> 
   select(caseid, isocntry, d10, d11, 
          d1, sd3, d7, sd1_4, sd1_7, sd1_8, d70,
-         d63, qc19, d15a, d60, qc13_11, qc6_10, qc17_4)
+         d63, qc19, d15a, qc13_11, qc6_10, qc17_4)
 
 # Recode dependent variable 
 filtered_survey <- survey |> 
@@ -164,7 +164,7 @@ filtered_survey <- filtered_survey |>
     d15a == 2 ~ "Student",
     d15a == 4 ~ "Retired",
     d15a <= 9 ~ "Self employed",
-    d15a <=  18 ~ "Employed" ,
+    d15a <=  14 ~ "Employed" ,
     TRUE ~ NA), 
     occupation = factor(occupation))
 
@@ -174,7 +174,7 @@ filtered_survey <- filtered_survey |>
     sd3 %in% c(1, 3, 4) ~ "Christians", 
     sd3 == 2 ~ "Orthodox Chrsitian", 
     sd3 %in% c(6, 7, 8) ~ "Muslims", 
-    sd3 %in% c(10, 11, 14) ~ "Other religions", 
+    sd3 %in% c(5, 10, 11, 14) ~ "Other religions", 
     sd3 %in% c(12, 13) ~ "Not religious", 
     TRUE ~ NA),
     religion = factor(religion))
@@ -197,7 +197,7 @@ filtered_survey <- filtered_survey |>
   mutate(personal_satis = if_else(d70 == 5, NA, d70),
          personal_satis = case_when(
            personal_satis <= 2 ~ "Satisfied",
-           personal_satis > 2 ~ "Not satisfied"
+           personal_satis <= 4 ~ "Not satisfied"
          ))
 
 # Ideology
@@ -225,24 +225,30 @@ filtered_survey <- filtered_survey %>%
     TRUE ~ NA
   ))
 
-filtered_survey <- filtered_survey |> 
+# Country names: DE-E and DE-W were problems 
+
+filtered_survey <- filtered_survey %>% 
   mutate(country = country_name(isocntry, to = "simple", 
                                 verbose = TRUE, poor_matches = TRUE),
          isocntry = countrycode::countrycode(country, origin = "country.name",
                                                 destination = "iso2c"))
-
-# Country names: DE-E and DE-W were problems 
-
+  
+individual_data <- filtered_survey |> 
+  select(caseid, isocntry, trans_name, female, age, religion, 
+         marital_status, personal_satis, ideology, 
+         contact_lgbti, social_class, occupation)
 ```
 
-```{r}
-#Merge
 
-final_data <- filtered_survey |> 
+```{r}
+# Merge-----------------------------------------------------
+
+final_data <- individual_data |> 
   left_join(rainbow, by = c("isocntry" = "country_iso")) |> 
   left_join(trans, by = c("isocntry" = "country_iso")) |> 
   left_join(economic_indicators, by = c("isocntry" = "country_iso")) |> 
   left_join(religiosity, by = c("isocntry" = "country_iso"))
+
 ```
 
 ### Other variables that I have added
@@ -502,58 +508,59 @@ The first bar chart presents the proportion of respondents in each country who r
 The second map visually reinforces this divide, categorizing countries based on whether a majority of respondents reported having contact with the LGBTI community. Western and Northern European countries (in green) generally show higher exposure with the exception of Portugal, while Eastern and Southern European countries (in red) report lower levels of contact.
 
 
-
 ```{r}
 #Interactive Plot GDP per capita vs Rainbow Indicator per Country
-western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "UK", "ES", "PT", "IT", "GB")
+western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "ES", "PT", "IT", "GB")
 eastern <- c("BG", "CZ", "EE", "HU", "LT", "LV", "PL", "RO", "RU", "SK", "SI", "HR", "UA", "GR", "CY")
 
-p1 <- ggplot(final_data, aes(x = gdp_pc, y = rain_ind, text = isocntry, 
-                             color = ifelse(isocntry %in% western_northern, "Western/Northern",
-                                            ifelse(isocntry %in% eastern, "Eastern", NA)))) +
-  geom_point(size = 3, alpha = 0.8) +
-  theme_light(base_size = 14) + 
-  theme(
-    legend.title = element_blank(),  # Eliminar título de la leyenda
-    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
-    axis.text = element_text(size = 14),  
-    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
-    panel.grid.minor = element_blank(), 
-    plot.margin = margin(10, 10, 10, 10)  
-  ) +
+ggplot(final_data, aes(x = gdp_pc, y = rain_ind, label = isocntry)) +
+  geom_point(aes(color = case_when(
+    isocntry %in% western_northern ~ "Western/Northern",
+    isocntry %in% eastern ~ "Eastern",
+    TRUE ~ "Other"
+  )), size = 3, stroke = 1, shape = 21, fill = "white") +  
+  geom_text_repel(aes(color = case_when(
+    isocntry %in% western_northern ~ "Western/Northern",
+    isocntry %in% eastern ~ "Eastern",
+    TRUE ~ "Other"
+  )), size = 4, max.overlaps = 15) +
+  scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3")) + 
+  theme_light() +
   labs(
     title = "GDP per capita vs Rainbow Indicator per Country",
-    x = "GDP per capita", 
-    y = "Rainbow Indicator"
+    x = "GDP per capita",
+    y = "Rainbow Indicator",
+    color = "Region"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    legend.position = "top"
   )
-
-ggplotly(p1, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
-
 ```
 
 
 ```{r}
-#Interactive Plot Religiosity vs Rainbow Indicator per Country
-p2 <- ggplot(final_data, aes(x = religiosity_percent, y = rain_ind, text = isocntry,
-                            color = ifelse(isocntry %in% western_northern, "Western/Northern",
-                                            ifelse(isocntry %in% eastern, "Eastern", NA)))) +
-  geom_point(size = 3, alpha = 0.8) + 
-  theme_light(base_size = 14) +
-  theme(
-    legend.position = "none", 
-    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),  
-    axis.text = element_text(size = 14),  
-    panel.grid.major = element_line(color = "lightgray", size = 0.5), 
-    panel.grid.minor = element_blank(), 
-    plot.margin = margin(10, 10, 10, 10)  
-  ) +
+ggplot(final_data, aes(x = gdp_pc, y = religiosity_percent, label = isocntry)) +
+  geom_point(aes(color = case_when(
+    isocntry %in% western_northern ~ "Western/Northern",
+    isocntry %in% eastern ~ "Eastern",
+    TRUE ~ "Other")), size = 4, shape = 21, stroke = 1, fill = "white") +  
+  geom_text(size = 2.5, hjust = -0.6) +  # Ajusta el texto a la derecha
+  scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3", "Other" = "gray")) + 
+  theme_minimal(base_size = 14) +
   labs(
-    title = "Religiosity vs Rainbow Indicator per Country",
-    x = "Percentage of Religiosity", 
-    y = "Rainbow Indicator"
+    title = "GDP per capita vs Religiosity Percentage per Country",
+    x = "GDP per capita",
+    y = "Religiosity Percentage",
+    color = "Region"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    legend.position = "top",
+    panel.grid.major = element_line(color = "grey80", linetype = "dashed"),
+    panel.grid.minor = element_blank()
   )
 
-ggplotly(p2, tooltip = "text") |> layout(title = list(x = 0.5, y = 0.95, xanchor = "center", yanchor = "top"))
 ```
 
 
@@ -566,7 +573,9 @@ ggplot(final_data, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRU
   labs(title = "Distribution of the Political Ideology by Country", 
        x = "Country", y = "Ideology (1 = Left, 10 = Right)") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
-        legend.position = "none")  
+        legend.position = "none") +  
+   scale_fill_manual(values = colorRampPalette(brewer.pal(9, "Blues"))(28))
+  
 
 ```
 This boxplot visualization illustrates the distribution of political ideology across countries, measured on a 1 to 10 scale, where 1 represents left-wing views and 10 represents right-wing views. The countries are arranged from left to right based on their median ideological positioning, with lighter shades representing more left-leaning countries and darker shades indicating more right-leaning ones.
