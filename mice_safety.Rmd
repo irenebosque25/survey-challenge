@@ -14,7 +14,7 @@ str(individual_data)
 The problem with the variables as they are is that they contain attributes, some are labeled doubles (dbl+lbl), some are not proper factors, etc. This will make working with the data, imputing it, making models as wel as making predictions much harder. Hence, it is highly important to clean the dataset structurally before continuing: 
 
 ```{r}
-final_data_clean <- final_data %>%
+individual_data <- individual_data %>%
   mutate(
     
     # labelled numerics => plain numeric
@@ -24,7 +24,6 @@ final_data_clean <- final_data %>%
     isocntry = as.factor(isocntry),
     personal_satis = as.factor(personal_satis),
     social_class = as.factor(social_class),
-    self_determination = as.factor(self_determination),
     
     # factor variables => proper factors
     trans_name = factor(trans_name),
@@ -40,7 +39,6 @@ final_data_clean <- final_data %>%
     
     # numeric variables => plain numeric
     caseid = as.numeric(caseid), 
-    serialid = as.numeric(serialid),
     ) %>%
   
   # attributes 
@@ -51,21 +49,27 @@ final_data_clean <- final_data %>%
     return(.)
   }))
 
-str(final_data_clean)
+str(individual_data)
 
 ```
-We can now continue and look at the NA distribution to see which variables have more missing values.
+
+First, we take a look at the NA distribution of the Eurobarometer dataset. 
 
 ```{r}
-colSums(is.na(final_data_clean))
+colSums(is.na(individual_data))
 ```
 
-The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and occupation, with 5883 NAs, making up 21% of the variable (5883/27438). Trans_name, has 3280 NAs, but we will not impute it as it is our target variable. We remove caseid and serialid as they could confuse our mice imputation. 
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. Trans_name has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid and serialid as they could confuse our mice imputation. 
 
 ```{r}
-mice_data <- final_data_clean %>% 
-  select(-c(caseid, serialid))
+mice_data <- individual_data %>% 
+  drop_na(c(marital_status, personal_satis)) %>% 
+  select(-c(caseid))
+
+colSums(is.na(mice_data))
+
 ```
+We are left with 4599 NAs for ideology, 472 NAs for contact_lgbti, 448 NAs for religion and 973 NAs for social class. 
 
 First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
 As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
@@ -114,16 +118,14 @@ plot_mice
 
 TODO: short interpretation 
 
-Now, we go ahead with the imputation of the complete dataset. 
+Now, we go ahead with the imputation of the complete dataset. We use m = 3, as our missing values range between 5% and 20% of the observations. Hence, m=3 is still powerful enough to have reasonable imputation. 
 
 ```{r}
 init = mice(mice_data, m = 3, seed = 123)
 
-imputed_data <- complete(init)
-write.csv(imputed_data, "imputed_data.csv")
-# my_data <- read.csv("my_data.csv")
 ```
 
+For our target variable trans_name we set method="", so that it is not imputed. 
 
 ```{r}
 meth = init$method
@@ -139,64 +141,17 @@ imputed_data = mice(mice_data, method=meth, m=3, seed=123)
 summary(imputed_data)
 ```
 
+# Model and prediction 
+
+For modeling, the best would be to use the function `with()` and all 3 generated datasets of mice, which would give us a better result but also take more time. Due to practicality and the point of the exercise not being focused on perfect mice usage, we take the decision of extracting and keep working with only one of the datasets. 
 
 ```{r}
 imputed_data_complete <- complete(imputed_data)
 
-write.csv(imputed_data, "imputed_data_complete.csv")
+write.csv(imputed_data_complete, "imputed_data_complete.csv")
 # my_data <- read.csv("imputed_data_complete.csv")
 ```
 
-# models 
-
-```{r}
-imputed_data_complete <- imputed_data_complete |> 
-  mutate(gdp_pc = log(gdp_pc))
-
-imputed_data_final_2 <- imputed_data |> 
-  mutate(isocntry = factor(isocntry))
-
-```
-
-
-```{r}
-model <- glm(trans_name ~ age + 
-               female + 
-               religion + 
-               occupation + 
-               marital_status + 
-               personal_satis +
-               contact_lgbti +
-               ideology +
-               social_class +
-               gdp_pc +
-               self_determination + 
-               gini + 
-               rain_ind, 
-             family = "binomial", 
-             data = imputed_data_final_2)
-
-summary(model)
-
-
-model2 <- glmer(trans_name ~ 
-                  age + 
-                  female + 
-                  religion +
-                  occupation +
-                  marital_status + 
-                  personal_satis +
-                  contact_lgbti +
-                  ideology +
-                  social_class +
-                  (1|isocntry), 
-                family = "binomial", 
-                data = imputed_data_final_2)
-
-summary(model2)
-
-
-```
 
 ```{r}
 final_model <- glmer(trans_name ~ 
