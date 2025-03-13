@@ -239,6 +239,77 @@ individual_data <- filtered_survey |>
          contact_lgbti, social_class, occupation)
 ```
 
+### Structural Cleaning and Final Merge 
+
+Before merging all datasets and proceeding with the analysis, we conducted an initial assessment of their characteristics to verify data consistency and ensure a reliable analytical process.
+
+```{r}
+str(individual_data)
+str(religiosity)
+str(economic_indicators)
+str(trans)
+str(rainbow)
+```
+
+We observe some inconsistencies in two fo the data sets: individual_data and religiosity. The problem with the variables in these data sets is that they contain attributes, some are labeled doubles (dbl+lbl), some are not proper factors, etc. This will make working with the data, imputing it, making models as well as making predictions much harder. Hence, it is highly important to clean the data set structurally before continuing. 
+
+We first proceed with the individual_data data set:
+
+```{r}
+individual_data <- individual_data %>%
+  mutate(
+    
+    # labelled numerics => plain numeric
+    across(where(~ inherits(., "haven_labelled")), ~ as.numeric(.)),
+    
+    # character variables => factors
+    isocntry = as.factor(isocntry),
+    personal_satis = as.factor(personal_satis),
+    social_class = as.factor(social_class),
+    self_determination = as.factor(self_determination),
+    
+    # factor variables => proper factors
+    trans_name = factor(trans_name),
+    female = factor(female),
+    contact_lgbti = factor(contact_lgbti),
+    religion = factor(religion),
+    marital_status = factor(marital_status),
+    occupation = factor(occupation),
+    
+    # dbl+lbl => plain numeric 
+    ideology = as.numeric(ideology),  
+    age = as.numeric(age),
+    
+    # numeric variables => plain numeric
+    caseid = as.numeric(caseid), 
+    serialid = as.numeric(serialid),
+    ) %>%
+  
+  # attributes 
+  mutate(across(everything(), ~ {
+    attr(., "label") <- NULL
+    attr(., "format.stata") <- NULL
+    attr(., "labels") <- NULL
+    return(.)
+  }))
+
+str(individual_data)
+```
+
+And then we repeat the process for the religiosity data set:
+
+```{r}
+religiosity <- religiosity |> 
+  mutate(across(everything(), ~{
+    attr(.,"label") <- NULL
+    attr(., "format.stata") <- NULL
+    return(.)
+  }))
+
+```
+
+Now, we can finally merge all the datasets using left_join: 
+
 ```{r}
 # Final merge
 final_data <- individual_data |> 
@@ -283,6 +354,7 @@ other_variables <- other_variables |>
   select(child_love, trans_pol, trans_school, isocntry)
 ```
 
+
 ## Descriptive analysis
 
 ### Individual descriptive analysis
@@ -290,6 +362,7 @@ other_variables <- other_variables |>
 ```{r}
 plot_intro(final_data)
 ```
+
 Before diving into an in-depth analysis of the dataset, we first examine its key characteristics using this plot_intro. We observe that 52.9% of the dataset consists of discrete variables, while 47.1% are continuous. Additionally, 70.4% of the rows are complete, meaning they contain no missing values in any variable. The total percentage of missing values is minimal, accounting for just 2.4%.
 
 ```{r}
@@ -666,7 +739,9 @@ b <- b1 / b2
 b
 ```
 
-### Mice imputation for ideology
+### Mice imputation
+
+#### Ideology
 
 We look at the NA distribution to see which variables have more missing values.
 
@@ -725,6 +800,97 @@ plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
   theme(legend.position = "none")
 
 plot_mice
+```
+
+#### Complete Dataset??
+
+We can now continue and look at the NA distribution to see which variables have more missing values.
+
+```{r}
+colSums(is.na(final_data_clean))
+```
+
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and occupation, with 5883 NAs, making up 21% of the variable (5883/27438). Trans_name, has 3280 NAs, but we will not impute it as it is our target variable. We remove caseid and serialid as they could confuse our mice imputation. 
+
+```{r}
+mice_data <- final_data_clean %>% 
+  select(-c(caseid, serialid))
+```
+
+First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
+As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
+
+```{r}
+imputed_comparison <- data.frame(
+  original = mice_data$ideology,
+  imputed_rf = complete(mice(mice_data, method = "rf", 
+                             m = 3, maxit = 3, 
+                             seed = 123))$ideology,
+  imputed_pmm = complete(mice(mice_data, method = "pmm",
+                              m = 3, maxit = 3, 
+                              seed = 123))$ideology)
+```
+
+The m and the maxit arguments are = 3 to reduce loading time without losing so much information.
+
+The next step is to plot the results to compare the resulting distributions: 
+
+```{r}
+# Arguments for the plot 
+methods <- c("original", "imputed_rf" , "imputed_pmm")
+titles <- c("Distribution of the Age Variable",
+           "Random Forest-imputed Distribution",
+            "PMM-imputed Distribution")
+colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
+
+
+# Long format 
+data_imputed_long <- imputed_comparison |>
+mutate(title = factor(method, levels = methods, labels = titles))
+
+
+# Distributions comparison 
+plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "black", position = "identity") +
+  facet_wrap(~ title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+plot_mice
+```
+
+TODO: short interpretation 
+
+Now, we go ahead with the imputation of the complete dataset. 
+
+```{r}
+init = mice(mice_data, m = 3, seed = 123)
+
+imputed_data <- complete(init)
+write.csv(imputed_data, "imputed_data.csv")
+# my_data <- read.csv("my_data.csv")
+```
+
+```{r}
+meth = init$method
+
+meth
+
+meth[c("trans_name")]=""
+
+imputed_data = mice(mice_data, method=meth, m=3, seed=123)
+```
+
+```{r}
+summary(imputed_data)
+```
+
+```{r}
+imputed_data_complete <- complete(imputed_data)
+
+write.csv(imputed_data, "imputed_data_complete.csv")
+# my_data <- read.csv("imputed_data_complete.csv")
 ```
 
 ## Explaining Cross-Country Differences
