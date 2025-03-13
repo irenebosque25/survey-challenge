@@ -87,9 +87,13 @@ economic_indicators <- economic_indicators |>
 economic_indicators <- economic_indicators |> 
   mutate(country = country_name(country, to = "simple", 
                                 verbose = TRUE),
-         country_iso = countrycode::countrycode(country, origin = "country.name",
+         country_iso = countrycode::countrycode(country, 
+                                                origin = "country.name",
                                                 destination = "iso2c")) |> 
   select(country_iso, gini, gdp_pc)
+
+economic_indicators <- economic_indicators |>
+  add_row(country_iso = "MT", gini = 31.4, gdp_pc = 33000.6)
 ```
 
 ```{r}
@@ -265,8 +269,7 @@ individual_data <- individual_data %>%
     isocntry = as.factor(isocntry),
     personal_satis = as.factor(personal_satis),
     social_class = as.factor(social_class),
-    self_determination = as.factor(self_determination),
-    
+
     # factor variables => proper factors
     trans_name = factor(trans_name),
     female = factor(female),
