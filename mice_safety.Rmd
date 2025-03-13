@@ -13,12 +13,17 @@ First, we take a look at the NA distribution of the Eurobarometer dataset.
 colSums(is.na(individual_data))
 ```
 
-The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. Trans_name has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid as it could confuse our mice imputation. 
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. Trans_name has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid and serialid as it could confuse our mice imputation. 
 
 ```{r}
 mice_data <- individual_data %>% 
   drop_na(c(marital_status, personal_satis)) %>% 
   select(-c(caseid))
+
+serialid <- mice_data$serialid
+
+mice_data <- mice_data %>% 
+  select(-c(serialid))
 
 colSums(is.na(mice_data))
 
@@ -116,12 +121,34 @@ data <- imputed_data_complete |>
 
 ```
 
-
-
-
-# Final model 
+# Predicting
 
 ```{r}
+# Training propio---------------------------------------
+set.seed(123)
+
+# reinsert serialid to be able to pinpoint observations 
+data$serialid <- serialid 
+
+# training and testing set 
+training <- data %>%
+  group_by(isocntry) %>%
+  sample_frac(0.7) %>%
+  ungroup()
+
+testing <- data %>%
+  anti_join(training, by = c("serialid")) 
+
+# remove serialid from the model dataset
+training <- training %>%
+  select(-serialid)
+
+testing <- testing  %>%
+  select(-serialid) 
+
+
+
+# training model 
 final_model <- glmer(trans_name ~ 
                        scale(age) + # Cuando incluyes tanto age como age^2, 
                        #el término lineal (age) y el término cuadrático (age^2) trabajan
@@ -130,7 +157,7 @@ final_model <- glmer(trans_name ~
                        I(scale(age)^2) +
                        female + 
                        occupation +
-                       religion +
+                       religion*scale(religiosity_percent) +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
                        personal_satis +
                        contact_lgbti*scale(rain_ind) +
                        self_determination +
@@ -141,14 +168,273 @@ final_model <- glmer(trans_name ~
                         |isocntry), 
                      family = binomial(link = "logit"),
                      control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
-                     data = imputed_data_final_2)
-
-str(imputed_data_final_2)
+                     data = training)
 
 summary(final_model)
+
+# complete cases 
+train <- training[complete.cases(training), ]
+test <- testing[complete.cases(testing), ]
+
+# prediction
+pred <- predict(final_model, newdata = test, type = "response")
+
+# pred() worked: 
+prediction <- as.factor(ifelse(pred > 0.5, 1, 0))
+
+# final: 
+confusionMatrix(prediction, test$trans_name)$table
+confusionMatrix(prediction, test$trans_name)$overall[1:2]
+
+
+```
+
+```
+> summary(final_model)
+Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+ Family: binomial  ( logit )
+Formula: trans_name ~ scale(age) + I(scale(age)^2) + female + occupation +  
+    religion * scale(religiosity_percent) + personal_satis +  
+    contact_lgbti * scale(rain_ind) + self_determination + scale(ideology) *  
+    scale(gdp_pc) + (1 + scale(age) + female + scale(ideology) |      isocntry)
+   Data: training
+Control: glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e+05))
+
+     AIC      BIC   logLik deviance df.resid 
+ 18258.9  18529.4  -9094.4  18188.9    16797 
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-7.6641 -0.7381  0.3438  0.6530  4.5606 
+
+Random effects:
+ Groups   Name            Variance Std.Dev. Corr             
+ isocntry (Intercept)     0.25708  0.5070                    
+          scale(age)      0.03880  0.1970   -0.22            
+          female1         0.04116  0.2029    0.66  0.01      
+          scale(ideology) 0.02304  0.1518   -0.86  0.12 -0.20
+Number of obs: 16832, groups:  isocntry, 28
+
+Fixed effects:
+                                                      Estimate Std. Error z value Pr(>|z|)    
+(Intercept)                                            0.36287    0.13549   2.678 0.007400 ** 
+scale(age)                                            -0.02651    0.04848  -0.547 0.584495    
+I(scale(age)^2)                                       -0.06606    0.02283  -2.894 0.003805 ** 
+female1                                                0.39024    0.05439   7.175 7.24e-13 ***
+occupationRetired                                     -0.22633    0.06318  -3.582 0.000341 ***
+occupationSelf employed                                0.14890    0.07340   2.029 0.042502 *  
+occupationStudent                                      0.29845    0.10135   2.945 0.003231 ** 
+occupationUnemployed                                   0.03383    0.06728   0.503 0.615138    
+religionMuslims                                       -0.43774    0.16402  -2.669 0.007612 ** 
+religionNot religious                                  0.38974    0.05693   6.846 7.60e-12 ***
+religionOrthodox Chrsitian                            -0.05788    0.08785  -0.659 0.510007    
+religionOther religions                               -0.08873    0.09445  -0.940 0.347467    
+scale(religiosity_percent)                            -0.19838    0.09026  -2.198 0.027954 *  
+personal_satisSatisfied                                0.35710    0.05257   6.794 1.09e-11 ***
+contact_lgbtiNo contact                               -0.89857    0.04252 -21.132  < 2e-16 ***
+scale(rain_ind)                                        0.27293    0.11077   2.464 0.013746 *  
+self_determination1                                    0.50359    0.23869   2.110 0.034876 *  
+scale(ideology)                                       -0.20109    0.03478  -5.782 7.38e-09 ***
+scale(gdp_pc)                                          0.13569    0.10210   1.329 0.183864    
+religionMuslims:scale(religiosity_percent)            -0.31890    0.27012  -1.181 0.237773    
+religionNot religious:scale(religiosity_percent)       0.07479    0.04864   1.537 0.124176    
+religionOrthodox Chrsitian:scale(religiosity_percent)  0.21083    0.07573   2.784 0.005371 ** 
+religionOther religions:scale(religiosity_percent)    -0.21029    0.07229  -2.909 0.003626 ** 
+contact_lgbtiNo contact:scale(rain_ind)               -0.06789    0.04365  -1.556 0.119805    
+scale(ideology):scale(gdp_pc)                         -0.08408    0.03501  -2.402 0.016323 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation matrix not shown by default, as p = 25 > 12.
+Use print(x, correlation=TRUE)  or
+    vcov(x)        if you need it
+
+optimizer (bobyqa) convergence code: 0 (OK)
+boundary (singular) fit: see help('isSingular')
+
+```
+
+```
+> confusionMatrix(prediction, test$trans_name)$table
+          Reference
+Prediction    0    1
+         0 1702  843
+         1 1244 3436
+```
+
+```
+> confusionMatrix(prediction, test$trans_name)$overall[1:2]
+ Accuracy     Kappa 
+0.7111419 0.3889707  
+
 ```
 
 ```{r}
+
+# CARET
+# ------------------------------------------------------------------------
+
+library(caret)
+
+# data_2 <- data %>% filter(!is.na(trans_name))
+# quitando NAs antes del modelo? 
+
+set.seed(123)
+in_train2 <- createDataPartition(data$trans_name, p = 0.7, list = FALSE)  # 70% for training
+training2 <- data[ in_train2,]
+testing2 <- data[-in_train2,]
+
+final_model2 <- glmer(trans_name ~ 
+                       scale(age) + # Cuando incluyes tanto age como age^2, 
+                       #el término lineal (age) y el término cuadrático (age^2) trabajan
+                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
+                       # no la vamos a eliminar
+                       I(scale(age)^2) +
+                       female + 
+                       occupation +
+                       religion*scale(religiosity_percent) +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
+                       personal_satis +
+                       contact_lgbti*scale(rain_ind) +
+                       self_determination +
+                       scale(ideology)*scale(gdp_pc) +
+                       (1  + scale(age) +
+                          female +
+                          scale(ideology)
+                        |isocntry), 
+                     family = binomial(link = "logit"),
+                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
+                     data = training2)
+
+summary(final_model2)
+
+train2 <- training2[complete.cases(training2), ] # quitando NAs despues del model 
+test2 <- testing2[complete.cases(testing2), ]
+
+# colSums(is.na(testing))  # Check for missing values in testing
+pred2 <- predict(final_model2, newdata = test2, type = "response")
+
+# pred() worked: 
+prediction2 <- as.factor(ifelse(pred2 > 0.5, 1, 0))
+
+# final: 
+confusionMatrix(prediction2, test2$trans_name)$table
+confusionMatrix(prediction2, test2$trans_name)$overall[1:2]
+
+```
+
+```
+> summary(final_model2)
+Generalized linear mixed model fit by maximum likelihood (Laplace Approximation) ['glmerMod']
+ Family: binomial  ( logit )
+Formula: trans_name ~ scale(age) + I(scale(age)^2) + female + occupation +  
+    religion * scale(religiosity_percent) + personal_satis +  
+    contact_lgbti * scale(rain_ind) + self_determination + scale(ideology) *  
+    scale(gdp_pc) + (1 + scale(age) + female + scale(ideology) |      isocntry)
+   Data: training2
+Control: glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e+05))
+
+     AIC      BIC   logLik deviance df.resid 
+ 18285.0  18555.6  -9107.5  18215.0    16806 
+
+Scaled residuals: 
+    Min      1Q  Median      3Q     Max 
+-7.5688 -0.7385  0.3432  0.6538  5.2973 
+
+Random effects:
+ Groups   Name            Variance Std.Dev. Corr             
+ isocntry (Intercept)     0.28444  0.5333                    
+          scale(age)      0.03587  0.1894   -0.12            
+          female1         0.04515  0.2125    0.62  0.24      
+          scale(ideology) 0.01794  0.1339   -0.95  0.05 -0.38
+Number of obs: 16841, groups:  isocntry, 28
+
+Fixed effects:
+                                                      Estimate Std. Error z value Pr(>|z|)    
+(Intercept)                                            0.25080    0.14174   1.769 0.076817 .  
+scale(age)                                            -0.06616    0.04740  -1.396 0.162771    
+I(scale(age)^2)                                       -0.08323    0.02284  -3.644 0.000269 ***
+female1                                                0.40322    0.05576   7.231 4.79e-13 ***
+occupationRetired                                     -0.13833    0.06341  -2.181 0.029146 *  
+occupationSelf employed                                0.14030    0.07321   1.916 0.055313 .  
+occupationStudent                                      0.29124    0.09993   2.914 0.003563 ** 
+occupationUnemployed                                   0.09258    0.06753   1.371 0.170370    
+religionMuslims                                       -0.54083    0.16217  -3.335 0.000853 ***
+religionNot religious                                  0.39244    0.05705   6.878 6.05e-12 ***
+religionOrthodox Chrsitian                             0.05211    0.08760   0.595 0.551963    
+religionOther religions                               -0.18174    0.09295  -1.955 0.050565 .  
+scale(religiosity_percent)                            -0.24517    0.09423  -2.602 0.009277 ** 
+personal_satisSatisfied                                0.39985    0.05225   7.652 1.98e-14 ***
+contact_lgbtiNo contact                               -0.90347    0.04242 -21.300  < 2e-16 ***
+scale(rain_ind)                                        0.28197    0.10969   2.570 0.010156 *  
+self_determination1                                    0.60323    0.26097   2.311 0.020809 *  
+scale(ideology)                                       -0.18637    0.03191  -5.840 5.22e-09 ***
+scale(gdp_pc)                                          0.09493    0.10729   0.885 0.376270    
+religionMuslims:scale(religiosity_percent)            -0.21194    0.29098  -0.728 0.466384    
+religionNot religious:scale(religiosity_percent)       0.11516    0.04841   2.379 0.017367 *  
+religionOrthodox Chrsitian:scale(religiosity_percent)  0.27974    0.07526   3.717 0.000202 ***
+religionOther religions:scale(religiosity_percent)    -0.23483    0.07020  -3.345 0.000822 ***
+contact_lgbtiNo contact:scale(rain_ind)               -0.07213    0.04364  -1.653 0.098333 .  
+scale(ideology):scale(gdp_pc)                         -0.07896    0.03235  -2.441 0.014655 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Correlation matrix not shown by default, as p = 25 > 12.
+Use print(x, correlation=TRUE)  or
+    vcov(x)        if you need it
+
+optimizer (bobyqa) convergence code: 0 (OK)
+boundary (singular) fit: see help('isSingular')
+
+```
+
+
+```
+> confusionMatrix(prediction2, test2$trans_name)$table
+          Reference
+Prediction    0    1
+         0 1685  838
+         1 1204 3489
+```
+
+```
+> confusionMatrix(prediction2, test2$trans_name)$overall[1:2]
+ Accuracy     Kappa 
+0.7170177 0.3979566 
+
+```
+
+
+finlandia 
+
+```{r}
+# limpio -------------------------------------------
+# separate Finland as our test country 
+test_no_fi <- data |> 
+  filter(isocntry != "FI")
+
+test_country_fi <- data |> 
+  filter(isocntry == "FI")
+
+# training and testing set 
+training <- test_no_fi %>%
+  group_by(isocntry) %>%
+  sample_frac(0.7) %>%
+  ungroup()
+
+testing <- test_no_fi %>%
+  anti_join(training, by = c("serialid")) %>% 
+  # we insert Finland to have a new country that the model hadnt previously seen 
+  bind_rows(test_country_fi) 
+
+# remove serialid from the model dataset
+training <- training %>%
+  select(-serialid)
+
+testing <- testing  %>%
+  select(-serialid) 
+
+
+# sucio -------------------------------------------
 # Logistic prediction (no va)
 
 set.seed(123)
@@ -173,75 +459,5 @@ train_set <- train_set |>
 
 test_set <- test_set |> 
   select(trans_name:religiosity_percent, isocntry)
-
-library(caret)
-library(DataExplorer)
-plot_intro(imputed_data_final_2) 
-
-imputed_data_final_3 <- imputed_data_final_2 %>% 
-  filter(!is.na(trans_name))
-
-write.csv(imputed_data_final_3, "imputed_data_final_3.csv")
-# my_data <- read.csv("my_data.csv")
-
-in_train <- createDataPartition(imputed_data_final_3$trans_name, p = 0.7, list = FALSE)  # 70% for training
-training <- imputed_data_final_3[ in_train,]
-testing <- imputed_data_final_3[-in_train,]
-
-final_model <- glmer(trans_name ~ 
-                       scale(age) + # Cuando incluyes tanto age como age^2, 
-                       #el término lineal (age) y el término cuadrático (age^2) trabajan
-                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
-                       # no la vamos a eliminar
-                       I(scale(age)^2) +
-                       female + 
-                       occupation + 
-                       religion +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
-                       personal_satis +
-                       contact_lgbti*scale(rain_ind) +
-                       self_determination +
-                       scale(ideology)*scale(gdp_pc) +
-                       (1  + scale(age) +
-                          female +
-                          scale(ideology)
-                        |isocntry), 
-                     family = binomial(link = "logit"),
-                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
-                     data = training)
-
-summary(final_model)
-
-train <- training[complete.cases(training), ]
-
-test <- testing[complete.cases(testing), ]
-
-
-colSums(is.na(testing))  # Check for missing values in testing
-
-
-pred <- predict(final_model, newdata = test, type = "response")
-
-prediction <- as.factor(ifelse(pred>0.5, 1, 0))
-prediction <- factor(ifelse(pred > 0.5, 1, 0), levels = c(0, 1))
-
-length(prediction)
-
-str(test)
-str(prediction)
-
-attr(prediction, "names") <- NULL
-
-
-levels(prediction)
-levels(test$trans_name)
-
-
-test$trans_name <- factor(test$trans_name, levels = c(0, 1))
-
-confusionMatrix(prediction, test$trans_name)$table
-confusionMatrix(prediction, test$trans_name)$overall[1:2]
-
-str(x)
-
 ```
 
