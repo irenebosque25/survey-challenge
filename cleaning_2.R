@@ -11,6 +11,7 @@ library(olsrr)
 library(caret)
 library(rsample)
 library(rpart)
+library(rpart.plot)
 
 # Religiosity-----------------------------------------------
 religiosity <- read_dta("data/replication_data.dta")
@@ -428,23 +429,24 @@ summary(step_model)
 
 
 final_model <- glmer(trans_name ~ 
-                       age + # Cuando incluyes tanto age como age^2, 
+                       scale(age) + # Cuando incluyes tanto age como age^2, 
                        #el término lineal (age) y el término cuadrático (age^2) trabajan
                        # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
                        # no la vamos a eliminar
-                       I(age^2) +
+                       I(scale(age)^2) +
                        female + 
                        occupation +
-                       religion*religiosity_percent +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
+                       religion*scale(religiosity_percent) +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
                        personal_satis +
-                       contact_lgbti*rain_ind +
+                       contact_lgbti*scale(rain_ind) +
                        self_determination +
-                       ideology*gdp_pc +
-                       (1 + age + 
+                       scale(ideology)*scale(gdp_pc) +
+                       (1  + scale(age) +
                           female +
-                          ideology
+                          scale(ideology)
                         |isocntry), 
-                     family = "binomial",
+                     family = binomial(link = "logit"),
+                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
                      data = final_data)
 
 summary(final_model)
@@ -456,33 +458,44 @@ lme4::ranef(model8) %>% # This is for extracting random intercepts and slopes
 # el step model reduce esta medida de forma espuria, es decir, estamos añadiendo más variables que no
 # resultan significativas y el AIC se reduce, pero sin añadir valor explicativo real al modelo.
 
-# Logistic prediction (no va)
+# Logistic prediction (no va)------------------------------------
 
 set.seed(123)
 
-wofi <- final_data |> 
+# Training propio---------------------------------------
+
+# reinsert serialid to be able to pinpoint observations 
+prediction_data <- mice_data %>% 
+  left_join(final_data_clean %>% select(serialid), 
+            by = "row_number")
+
+# separate Finland as our test country 
+test_no_fi <- final_data |> 
   filter(isocntry != "FI")
 
-test_country <-final_data |> 
+test_country_fi <-final_data |> 
   filter(isocntry == "FI")
 
-train_set <- wofi %>%
+# training and testing set 
+training <- test_no_fi %>%
   group_by(isocntry) %>%
   sample_frac(0.7) %>%
   ungroup()
 
-test_set <- anti_join(wofi, train_set, by = c("serialid")) 
+testing <- test_no_fi %>%
+  anti_join(training, by = c("serialid")) %>% 
+  # we insert Finland to have a new country that the model hadnt previously seen 
+  bind_rows(test_country_fi) 
 
-testing <- bind_rows(test_set, test_country)
+# remove caseid from the model dataset
 
-train_set <- train_set |> 
-  select(trans_name:religiosity_percent)
+training <- training %>%
+  select(-serialid)
 
-test_set <- test_set |> 
-  select(trans_name:religiosity_percent)
+testing <- testing  %>%
+  select(-serialid) 
 
-testing <- testing |> 
-  select(trans_name:religiosity_percent)
+# training model 
 
 final_model <- glmer(trans_name ~ 
                        scale(age) + # Cuando incluyes tanto age como age^2, 
@@ -503,40 +516,19 @@ final_model <- glmer(trans_name ~
                         |isocntry), 
                      family = binomial(link = "logit"),
                      control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
-                     data = train_set)
+                     data = training)
 
 summary(final_model)
 
-train <- train_set[complete.cases(train_set), ]
-test <- test_set[complete.cases(test_set), ]
+# complete cases 
+train <- training[complete.cases(training), ]
+test <- testing[complete.cases(testing), ]
 
-pred <- predict(final_model, newdata = test_set, type = "response")
+# prediction
+pred <- predict(final_model, newdata = testing, type = "response")
 
-train_set$age <- as.numeric(as.character(train_set$age))
-train_set$ideology <- as.numeric(as.character(train_set$ideology))
-# train_set$self_determination <- as.numeric(train_set$self_determination)
+pred <- predict(final_model, newdata = test, type = "response")
 
-train_set$self_determination <- as_factor(train_set$self_determination)
-
-train_set$personal_satis <- as.factor(train_set$personal_satis)
-train_set$social_class <- as.factor(train_set$social_class)
-
-train_set$religiosity_percent <- as.numeric(train_set$religiosity_percent)
-
-str(train_set)
-
-test_set$age <- as.numeric(as.character(test_set$age))
-test_set$ideology <- as.numeric(as.character(test_set$ideology))
-# train_set$self_determination <- as.numeric(train_set$self_determination)
-
-test_set$self_determination <- as_factor(test_set$self_determination)
-
-test_set$personal_satis <- as.factor(test_set$personal_satis)
-test_set$social_class <- as.factor(test_set$social_class)
-
-test_set$religiosity_percent <- as.numeric(test_set$religiosity_percent)
-
-str(test_set)
 
 
 # Knn
@@ -567,7 +559,7 @@ train_set$trans_name <- as.factor(train_set$trans_name)
 
 train_set <- as.data.frame(train_set)
 
-train<- train_set[complete.cases(train_set), ]
+train <- train_set[complete.cases(train_set), ]
 
 control = rpart.control(minsplit = 30, maxdepth = 10, cp=0.01)
 
@@ -575,7 +567,7 @@ model <- trans_name ~ .
 dtFit <- rpart(model, data=train, method = "class", control = control)
 summary(dtFit)
 
-library(rpart.plot)
+
 rpart.plot(dtFit, digits=3)
 
 dtPred <- predict(dtFit, test, type = "class")
@@ -605,3 +597,19 @@ confusionMatrix(prediction, test$trans_name)$table
 confusionMatrix(prediction, test$trans_name)$overall[1:2]
 
 # Random Forest
+
+rfFit <- train(trans_name ~ ., 
+               data = train,
+               method = "rf",   
+               preProc=c('scale','center'),
+               tuneLength = 10,
+               metric="ROC",
+               trControl = ctrl)
+
+plot(rfFit)
+
+rfProb <- predict(rfFit, test, type="prob")
+prediction <- as.factor(ifelse(rfProb[,2] > 0.5, "Yes", "No"))
+
+confusionMatrix(prediction, test$trans_name)$table
+confusionMatrix(prediction, test$trans_name)$overall[1:2]
