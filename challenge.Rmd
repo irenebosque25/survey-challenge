@@ -1,5 +1,5 @@
 ---
-title: "challenge"
+title: "Challenge: Discrimination in the EU"
 author: "Mafalda González, David Pereiro, Irene Bosque y Pablo Aísa"
 output: html_document
 date: "2025-03-14"
@@ -9,9 +9,7 @@ date: "2025-03-14"
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Discrimination in the EU
-
-## Introduction
+# Introduction
 
 ```{r}
 library(tidyverse)
@@ -31,9 +29,9 @@ library(car)
 library(lme4)
 ```
 
-## Data cleaning
+# Data cleaning
 
-### Country-level variables
+## Country-level variables
 
 ```{r}
 # Religiosity-----------------------------------------------
@@ -140,7 +138,7 @@ rainbow <- rainbow |>
 
 ```
 
-### Individual level variables from the survey
+## Individual level variables from the survey
 
 ```{r}
 survey <- read_dta("data/ZA7575.dta")
@@ -242,7 +240,7 @@ individual_data <- filtered_survey |>
          contact_lgbti, social_class, occupation)
 ```
 
-### Structural Cleaning and Final Merge 
+## Structural Cleaning and Final Merge 
 
 Before merging all datasets and proceeding with the analysis, we conducted an initial assessment of their characteristics to verify data consistency and ensure a reliable analytical process.
 
@@ -321,7 +319,7 @@ final_data <- individual_data |>
   left_join(religiosity, by = c("isocntry" = "country_iso"))
 ```
 
-### Other interesting variables from the survey
+## Other interesting variables from the survey
 
 ```{r}
 
@@ -357,9 +355,9 @@ other_variables <- other_variables |>
 ```
 
 
-## Descriptive analysis
+# Descriptive analysis
 
-### Individual descriptive analysis
+## Individual descriptive analysis
 
 ```{r}
 plot_intro(final_data)
@@ -431,7 +429,7 @@ plot_correlation(corr_matrix)
 
 This correlation matrix highlights that support for transgender rights is significantly shaped by economic, cultural, and policy-related factors. Higher economic development, lower inequality, and strong LGBTI legal protections are associated with greater acceptance, while religiosity, conservatism, and age tend to correlate with lower support.
 
-### Distribution of the individual variables
+## Distribution of the individual variables
 
 First of all, we proceed to analyze the distribution of the individual variables in our dataset:
 
@@ -529,7 +527,7 @@ On the other hand, we observe the age distribution of the respondents in the dat
 Overall, the distribution supports the earlier summary statistics, where the median age was reported at 53 years, with the youngest quartile at 37 years or younger and the oldest quartile at 66 years or older. The relatively low representation of younger individuals could influence the overall attitudinal patterns observed in the study.
 
 
-### Variable Distribution by Country
+## Variable Distribution by Country
 
 Next, we analyze the contextual differences between the countries surveyed in the dataset.
 
@@ -652,7 +650,7 @@ However, Spain is particularly interesting because, although its median ideology
 In contrast, some countries like the Czech Republic (CZ), Cyprus (CY), and Estonia (EE) exhibit the opposite trend. Their median scores remain relatively moderate, yet the distribution skews towards the right, implying a larger proportion of right-leaning individuals compared to left-leaning ones. 
 
 
-### Bivariate Analysis with Target Variable
+## Bivariate Analysis with Target Variable
 
 ```{r}
 
@@ -708,7 +706,7 @@ The second boxplot (Religiosity vs. Support for Trans Documents) presents a slig
 
 In summary, while there are some observable differences in political ideology and religiosity between those who support or oppose transgender rights, they are not highly significant. The distributions indicate that attitudes toward transgender document changes are influenced by multiple factors, with ideology and religiosity playing a role but not being the sole determinants.
 
-### Other variables related to transgender persons
+## Other variables related to transgender persons
 
 ```{r}
 # Boxplot 1: trans_child
@@ -741,26 +739,30 @@ b <- b1 / b2
 b
 ```
 
-### Mice imputation
+# Mice imputation
 
-#### Ideology
+Before continuing to the models we take a look at missing values in the dataset and the possibility to impute them. We did the descriptive analysis without previous imputation as we perceived that descriptive makes only sense with the original dataset and the real values we know to be true. 
 
-We look at the NA distribution to see which variables have more missing values.
-
-```{r}
-colSums(is.na(final_data))
-```
-
-It can be seen that the ideology variable is the most appropriate variable to impute as its number of NA represents a significant percentage of the total observations.
+First, we take a look at the NA distribution of the Eurobarometer dataset. 
 
 ```{r}
-mice_data <- final_data |> 
-  mutate(across(where(is.labelled), as_factor),
-         ideology = as.numeric(ideology)) |>
-  select(-caseid, -religiosity_percent) #not useful for the mice imputation
+colSums(is.na(individual_data))
 ```
 
-There are factor and numerical variables, so the best option is to test with Random Forest and Pmm methods.
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. Trans_name has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid as it could confuse our mice imputation. 
+
+```{r}
+mice_data <- individual_data %>% 
+  drop_na(c(marital_status, personal_satis)) %>% 
+  select(-c(caseid))
+
+colSums(is.na(mice_data))
+
+```
+We are left with 4599 NAs for ideology, 472 NAs for contact_lgbti, 448 NAs for religion and 973 NAs for social class. 
+
+First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
+As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
 
 ```{r}
 imputed_comparison <- data.frame(
@@ -804,75 +806,15 @@ plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
 plot_mice
 ```
 
-#### Complete Dataset??
-
-We can now continue and look at the NA distribution to see which variables have more missing values.
-
-```{r}
-colSums(is.na(final_data_clean))
-```
-
-The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and occupation, with 5883 NAs, making up 21% of the variable (5883/27438). Trans_name, has 3280 NAs, but we will not impute it as it is our target variable. We remove caseid and serialid as they could confuse our mice imputation. 
-
-```{r}
-mice_data <- final_data_clean %>% 
-  select(-c(caseid, serialid))
-```
-
-First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
-As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
-
-```{r}
-imputed_comparison <- data.frame(
-  original = mice_data$ideology,
-  imputed_rf = complete(mice(mice_data, method = "rf", 
-                             m = 3, maxit = 3, 
-                             seed = 123))$ideology,
-  imputed_pmm = complete(mice(mice_data, method = "pmm",
-                              m = 3, maxit = 3, 
-                              seed = 123))$ideology)
-```
-
-The m and the maxit arguments are = 3 to reduce loading time without losing so much information.
-
-The next step is to plot the results to compare the resulting distributions: 
-
-```{r}
-# Arguments for the plot 
-methods <- c("original", "imputed_rf" , "imputed_pmm")
-titles <- c("Distribution of the Age Variable",
-           "Random Forest-imputed Distribution",
-            "PMM-imputed Distribution")
-colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
-
-
-# Long format 
-data_imputed_long <- imputed_comparison |>
-mutate(title = factor(method, levels = methods, labels = titles))
-
-
-# Distributions comparison 
-plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
-  geom_histogram(binwidth = 1, color = "black", position = "identity") +
-  facet_wrap(~ title, scales = "free_y") +
-  scale_fill_manual(values = colors_fill) +
-  theme_classic() +
-  theme(legend.position = "none")
-
-plot_mice
-```
-
 TODO: short interpretation 
 
-Now, we go ahead with the imputation of the complete dataset. 
+Now, we go ahead with the imputation of the complete dataset. We use m = 3, as our missing values range between 5% and 20% of the observations. Hence, m=3 is still powerful enough to have reasonable imputation. 
 
 ```{r}
 init = mice(mice_data, m = 3, seed = 123)
-
-imputed_data <- complete(init)
-write.csv(imputed_data, "imputed_data.csv")
-# my_data <- read.csv("my_data.csv")
 ```
+
+For our target variable trans_name we set method="", so that it is not imputed. 
 
 ```{r}
 meth = init$method
@@ -888,14 +830,27 @@ imputed_data = mice(mice_data, method=meth, m=3, seed=123)
 summary(imputed_data)
 ```
 
+# Merging datasets again
+
+For modeling, the best would be to use the function `with()` and all 3 generated datasets of mice, which would give us a better result but also take more time. Due to practicality and the point of the exercise not being focused on perfect mice usage, we take the decision of extracting and keep working with only one of the datasets. 
+
 ```{r}
 imputed_data_complete <- complete(imputed_data)
 
-write.csv(imputed_data, "imputed_data_complete.csv")
+write.csv(imputed_data_complete, "imputed_data_complete.csv")
 # my_data <- read.csv("imputed_data_complete.csv")
 ```
 
-## Explaining Cross-Country Differences
+```{r}
+data <- imputed_data_complete |> 
+  left_join(rainbow, by = c("isocntry" = "country_iso")) |> 
+  left_join(trans, by = c("isocntry" = "country_iso")) |> 
+  left_join(economic_indicators, by = c("isocntry" = "country_iso")) |> 
+  left_join(religiosity, by = c("isocntry" = "country_iso"))
+
+```
+
+# Explaining Cross-Country Differences
 
 First of all, we performed a brief data preparation to enhance stability and model performance. First, we transformed GDP per capita with a natural logarithm to reduce the asymmetry of its distribution and make nonlinear relationships with other variables more manageable. Then, we reassigned the reference level of the categorical variable on contact with LGBTI people, setting "No contact" as the base category.
 
@@ -974,6 +929,7 @@ summary(model3)
 We started with model2, a generalized linear mixed-effects model that includes a random intercept for each country to account for country-specific variation. Then, we tried model3, a more complex model that includes interaction terms (e.g., religion and religiosity, marital status and religiosity) to capture more nuanced relationships. Some variables like age, self-determination, and GDP per capita were not significant on their own, but interactions like religion and marital status showed relevance. 
 
 In model4, we extended the complexity further by adding additional interaction terms and quadratic terms, similar to model3. This model includes interactions like religion and religiosity percent, personal satisfaction and self-determination, and contact with LGBTI people with variables such as rain index and self-determination. We also included the interaction between ideology and GDP per capita and social class with the Gini index.
+
 ```{r}
 model4 <- glmer(trans_name ~ 
                   scale(age) + 
@@ -1068,7 +1024,7 @@ model7 <- glmer(trans_name ~
 summary(model7)
 ```
 
-In model8, we introduced random slopes alongside random intercepts to allow for greater flexibility in how the predictors influence the outcome variable across different countries. Specifically, we modeled age, gender (female), and ideology as having random slopes by country, meaning these variables' effects can vary across different countries. The random intercepts allow for country-specific baselines, and the random slopes allow us to capture how the relationships between these predictors and the target variable may differ between countries.
+In model8, we introduced random slopes alongside random intercepts. Specifically, we modeled age, gender (female), and ideology as having random slopes by country. The random intercepts allow for country-specific baselines, and the random slopes allow us to capture how the relationships between these predictors and the target variable may differ between countries.
 
 ```{r}
 model8 <- glmer(trans_name ~ 
@@ -1090,6 +1046,7 @@ summary(model8)
 ranef(model8) |>  # This is for extracting random intercepts and slopes
   str()
 ```
+
 The random effects output shows how intercepts and slopes vary by country. The (Intercept) column represents country-specific deviations from the overall intercept. The scale(age), female1, and scale(ideology) columns indicate how these predictors' effects differ across countries. The values suggest small but varying influences of age, gender, and ideology on the target variable, depending on the country.
 
 In step_model, we continued refining the model by incorporating both age and its squared term (age^2). The rationale behind this is that the linear term (age) and the quadratic term (age^2) work together to model a curvilinear relationship. Even though age itself may not be significant, we retain it in the model because the combined effect of both terms allows for capturing a potential non-linear relationship with the target variable. This helps to better model the relationship between age and support for transgender rights.
@@ -1119,6 +1076,7 @@ step_model <- glmer(trans_name ~
 summary(step_model)
 ```
 
+The results showed that age (quadratic), gender, occupation, personal satisfaction, contact with LGBTI people, and ideology were relevant predictors. Additionally, interactions between religion and religiosity, as well as ideology and GDP, played a significant role. However, variables like marital status, social class, and the Gini index were not significant, leading to their exclusion in the final model:
 
 ```{r}
 final_model <- glmer(trans_name ~ 
@@ -1144,12 +1102,14 @@ lme4::ranef(model8) %>%
   str 
 ```
 
-In final_model, we have refined the model to include both age and its squared term (age^2), maintaining them together to model a curvilinear relationship between age and the target variable. While age alone may not be significant, we keep both terms to capture this non-linear effect.
+In final_model, we have refined the model to include both age and its squared term (age^2), maintaining them together to model a curvilinear relationship between age and the target variable. 
 
-The model also includes key predictors such as female, occupation, and religion interactions with religiosity_percent. Even if individual variables in an interaction are not significant, we retain them when their interaction term is significant, as this reflects important joint effects. Other terms include personal_satis, contact_lgbti with rain index, self_determination, and ideology with GDP per capita. We also keep random slopes for age, female, and ideology across countries to account for the possibility that these relationships may vary by country.
+This final_model is chosen over the step_model, despite having a higher AIC, because the step_model reduces this metric spuriously by eliminating variables that, although not individually significant, contribute theoretical coherence and explanatory value to the model. Over-simplification can falsely improve the AIC without actually leading to a better fit.
 
-The model was chosen over the step_model despite having a slightly higher AIC because the step model reduced the AIC by including non-significant variables. While it lowered the AIC, it did so without adding real explanatory value to the model, which could lead to overfitting and a loss of model robustness.
+Regarding the results, support for trans rights is influenced by several factors. Being a woman significantly increases support, while age has a curvilinear effect, with a decline at older ages. Being retired reduces support, and religiosity also plays a role, particularly in some religious groups where lower acceptance is observed. In contrast, being non-religious is associated with a more favorable stance. Personal satisfaction and contact with LGBTI individuals have strong positive and highly significant effects, suggesting that social interaction strongly shapes attitudes. Additionally, while a more conservative ideology decreases support, this effect is moderated by the country’s GDP per capita.
 
-## Predictive model
+In terms of random effects, there is variation between countries in the intercept and in the slopes of age, gender, and ideology, indicating that these factors do not influence attitudes in the same way across national contexts. Overall, the model confirms that support for trans rights is a multifaceted phenomenon shaped by both individual and structural factors.
 
-## Conclusions
+# Predictive model
+
+# Conclusions
