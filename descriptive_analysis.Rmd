@@ -157,14 +157,13 @@ filtered_survey <- filtered_survey |>
   mutate(age = if_else(d11 == 99 , NA, d11))
 
 # Current occupation
-
 filtered_survey <- filtered_survey |> 
   mutate(occupation = case_when(
     d15a %in% c(1, 3) ~ "Unemployed",
     d15a == 2 ~ "Student",
     d15a == 4 ~ "Retired",
     d15a <= 9 ~ "Self employed",
-    d15a <=  14 ~ "Employed" ,
+    d15a <=  18 ~ "Employed" ,
     TRUE ~ NA), 
     occupation = factor(occupation))
 
