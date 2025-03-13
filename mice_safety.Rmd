@@ -1,0 +1,324 @@
+---
+title: "mice"
+output: html_document
+date: "2025-03-11"
+---
+### Mice imputation for ideology
+
+Before we start with the mice imputation, it is important to take a second look at the the characteristics of the variables. 
+
+```{r}
+str(individual_data)
+```
+
+The problem with the variables as they are is that they contain attributes, some are labeled doubles (dbl+lbl), some are not proper factors, etc. This will make working with the data, imputing it, making models as wel as making predictions much harder. Hence, it is highly important to clean the dataset structurally before continuing: 
+
+```{r}
+final_data_clean <- final_data %>%
+  mutate(
+    
+    # labelled numerics => plain numeric
+    across(where(~ inherits(., "haven_labelled")), ~ as.numeric(.)),
+    
+    # character variables => factors
+    isocntry = as.factor(isocntry),
+    personal_satis = as.factor(personal_satis),
+    social_class = as.factor(social_class),
+    self_determination = as.factor(self_determination),
+    
+    # factor variables => proper factors
+    trans_name = factor(trans_name),
+    female = factor(female),
+    contact_lgbti = factor(contact_lgbti),
+    religion = factor(religion),
+    marital_status = factor(marital_status),
+    occupation = factor(occupation),
+    
+    # dbl+lbl => plain numeric 
+    ideology = as.numeric(ideology),  
+    age = as.numeric(age),
+    
+    # numeric variables => plain numeric
+    caseid = as.numeric(caseid), 
+    serialid = as.numeric(serialid),
+    ) %>%
+  
+  # attributes 
+  mutate(across(everything(), ~ {
+    attr(., "label") <- NULL
+    attr(., "format.stata") <- NULL
+    attr(., "labels") <- NULL
+    return(.)
+  }))
+
+str(final_data_clean)
+
+```
+We can now continue and look at the NA distribution to see which variables have more missing values.
+
+```{r}
+colSums(is.na(final_data_clean))
+```
+
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and occupation, with 5883 NAs, making up 21% of the variable (5883/27438). Trans_name, has 3280 NAs, but we will not impute it as it is our target variable. We remove caseid and serialid as they could confuse our mice imputation. 
+
+```{r}
+mice_data <- final_data_clean %>% 
+  select(-c(caseid, serialid))
+```
+
+First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
+As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
+
+```{r}
+imputed_comparison <- data.frame(
+  original = mice_data$ideology,
+  imputed_rf = complete(mice(mice_data, method = "rf", 
+                             m = 3, maxit = 3, 
+                             seed = 123))$ideology,
+  imputed_pmm = complete(mice(mice_data, method = "pmm",
+                              m = 3, maxit = 3, 
+                              seed = 123))$ideology)
+```
+
+The m and the maxit arguments are = 3 to reduce loading time without losing so much information.
+
+The next step is to plot the results to compare the resulting distributions: 
+
+```{r}
+# Arguments for the plot 
+methods <- c("original", "imputed_rf" , "imputed_pmm")
+titles <- c("Distribution of the Age Variable",
+           "Random Forest-imputed Distribution",
+            "PMM-imputed Distribution")
+colors_fill <- c( "#E7CB94", "#E7969C", "#DE9ED6")
+
+
+# Long format 
+data_imputed_long <- imputed_comparison |>
+  pivot_longer(cols = all_of(methods), names_to = "method", 
+                values_to = "value") |>
+  mutate(title = factor(method, levels = methods, labels = titles))
+
+
+# Distributions comparison 
+plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
+  geom_histogram(binwidth = 1, color = "black", position = "identity") +
+  facet_wrap(~ title, scales = "free_y") +
+  scale_fill_manual(values = colors_fill) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+plot_mice
+```
+
+TODO: short interpretation 
+
+Now, we go ahead with the imputation of the complete dataset. 
+
+```{r}
+init = mice(mice_data, m = 3, seed = 123)
+
+imputed_data <- complete(init)
+write.csv(imputed_data, "imputed_data.csv")
+# my_data <- read.csv("my_data.csv")
+```
+
+
+```{r}
+meth = init$method
+
+meth
+
+meth[c("trans_name")]=""
+
+imputed_data = mice(mice_data, method=meth, m=3, seed=123)
+```
+
+```{r}
+summary(imputed_data)
+```
+
+
+```{r}
+imputed_data_complete <- complete(imputed_data)
+
+write.csv(imputed_data, "imputed_data_complete.csv")
+# my_data <- read.csv("imputed_data_complete.csv")
+```
+
+# models 
+
+```{r}
+imputed_data_complete <- imputed_data_complete |> 
+  mutate(gdp_pc = log(gdp_pc))
+
+imputed_data_final_2 <- imputed_data |> 
+  mutate(isocntry = factor(isocntry))
+
+```
+
+
+```{r}
+model <- glm(trans_name ~ age + 
+               female + 
+               religion + 
+               occupation + 
+               marital_status + 
+               personal_satis +
+               contact_lgbti +
+               ideology +
+               social_class +
+               gdp_pc +
+               self_determination + 
+               gini + 
+               rain_ind, 
+             family = "binomial", 
+             data = imputed_data_final_2)
+
+summary(model)
+
+
+model2 <- glmer(trans_name ~ 
+                  age + 
+                  female + 
+                  religion +
+                  occupation +
+                  marital_status + 
+                  personal_satis +
+                  contact_lgbti +
+                  ideology +
+                  social_class +
+                  (1|isocntry), 
+                family = "binomial", 
+                data = imputed_data_final_2)
+
+summary(model2)
+
+
+```
+
+```{r}
+final_model <- glmer(trans_name ~ 
+                       scale(age) + # Cuando incluyes tanto age como age^2, 
+                       #el término lineal (age) y el término cuadrático (age^2) trabajan
+                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
+                       # no la vamos a eliminar
+                       I(scale(age)^2) +
+                       female + 
+                       occupation +
+                       religion +
+                       personal_satis +
+                       contact_lgbti*scale(rain_ind) +
+                       self_determination +
+                       scale(ideology)*scale(gdp_pc) +
+                       (1  + scale(age) +
+                          female +
+                          scale(ideology)
+                        |isocntry), 
+                     family = binomial(link = "logit"),
+                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
+                     data = imputed_data_final_2)
+
+str(imputed_data_final_2)
+
+summary(final_model)
+```
+
+```{r}
+# Logistic prediction (no va)
+
+set.seed(123)
+
+wofi <- imputed_data_final_2 |> 
+  filter(isocntry != "FI")
+
+test_country <-imputed_data_final_2 |> 
+  filter(isocntry == "FI")
+
+train_set <- wofi %>%
+  group_by(isocntry) %>%
+  sample_frac(0.7) %>%
+  ungroup()
+
+test_set <- anti_join(wofi, train_set, by = c("serialid")) 
+
+testing <- bind_rows(test_set, test_country)
+
+train_set <- train_set |> 
+  select(trans_name:religiosity_percent, isocntry)
+
+test_set <- test_set |> 
+  select(trans_name:religiosity_percent, isocntry)
+
+library(caret)
+library(DataExplorer)
+plot_intro(imputed_data_final_2) 
+
+imputed_data_final_3 <- imputed_data_final_2 %>% 
+  filter(!is.na(trans_name))
+
+write.csv(imputed_data_final_3, "imputed_data_final_3.csv")
+# my_data <- read.csv("my_data.csv")
+
+in_train <- createDataPartition(imputed_data_final_3$trans_name, p = 0.7, list = FALSE)  # 70% for training
+training <- imputed_data_final_3[ in_train,]
+testing <- imputed_data_final_3[-in_train,]
+
+final_model <- glmer(trans_name ~ 
+                       scale(age) + # Cuando incluyes tanto age como age^2, 
+                       #el término lineal (age) y el término cuadrático (age^2) trabajan
+                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
+                       # no la vamos a eliminar
+                       I(scale(age)^2) +
+                       female + 
+                       occupation + 
+                       religion +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
+                       personal_satis +
+                       contact_lgbti*scale(rain_ind) +
+                       self_determination +
+                       scale(ideology)*scale(gdp_pc) +
+                       (1  + scale(age) +
+                          female +
+                          scale(ideology)
+                        |isocntry), 
+                     family = binomial(link = "logit"),
+                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
+                     data = training)
+
+summary(final_model)
+
+train <- training[complete.cases(training), ]
+
+test <- testing[complete.cases(testing), ]
+
+
+colSums(is.na(testing))  # Check for missing values in testing
+
+
+pred <- predict(final_model, newdata = test, type = "response")
+
+prediction <- as.factor(ifelse(pred>0.5, 1, 0))
+prediction <- factor(ifelse(pred > 0.5, 1, 0), levels = c(0, 1))
+
+length(prediction)
+
+str(test)
+str(prediction)
+
+attr(prediction, "names") <- NULL
+
+
+levels(prediction)
+levels(test$trans_name)
+
+
+test$trans_name <- factor(test$trans_name, levels = c(0, 1))
+
+confusionMatrix(prediction, test$trans_name)$table
+confusionMatrix(prediction, test$trans_name)$overall[1:2]
+
+str(x)
+
+```
+
