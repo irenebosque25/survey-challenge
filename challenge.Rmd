@@ -1064,6 +1064,7 @@ model7 <- glmer(trans_name ~
                 data = final_data)
 summary(model7)
 ```
+
 In model8, we introduced random slopes alongside random intercepts to allow for greater flexibility in how the predictors influence the outcome variable across different countries. Specifically, we modeled age, gender (female), and ideology as having random slopes by country, meaning these variables' effects can vary across different countries. The random intercepts allow for country-specific baselines, and the random slopes allow us to capture how the relationships between these predictors and the target variable may differ between countries.
 
 ```{r}
@@ -1083,9 +1084,11 @@ model8 <- glmer(trans_name ~
                 data = final_data)
 summary(model8)
 
-lme4::ranef(model8) %>% # This is for extracting random intercepts and slopes
-  str # ¿Como sabemos cual es cual?
+ranef(model8) |>  # This is for extracting random intercepts and slopes
+  str()
 ```
+The random effects output shows how intercepts and slopes vary by country. The (Intercept) column represents country-specific deviations from the overall intercept. The scale(age), female1, and scale(ideology) columns indicate how these predictors' effects differ across countries. The values suggest small but varying influences of age, gender, and ideology on the target variable, depending on the country.
+
 In step_model, we continued refining the model by incorporating both age and its squared term (age^2). The rationale behind this is that the linear term (age) and the quadratic term (age^2) work together to model a curvilinear relationship. Even though age itself may not be significant, we retain it in the model because the combined effect of both terms allows for capturing a potential non-linear relationship with the target variable. This helps to better model the relationship between age and support for transgender rights.
 
 The model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
