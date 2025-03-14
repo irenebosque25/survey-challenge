@@ -1443,7 +1443,6 @@ Finally, for an extra analysis we will analyze the paradata from the survey.
 
 ```{r}
 # read data
-rm(list = ls())
 survey <- read_dta("data/ZA7575.dta")
 ```
 
@@ -1577,3 +1576,63 @@ summary(model)
 This model predicts the probability of having a NA in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
 
 # Conclusions
+
+```{r}
+data_comparaison <- data |> 
+  filter(isocntry=="IT"| isocntry == "ES")
+
+data_comparaison <- data_comparaison |> 
+  mutate(female = case_when(
+    female == "1" ~ 1,
+    female == "0" ~ 0,
+    TRUE ~ NA
+  ))
+
+ggplot(data_comparaison, aes(x = isocntry, fill = trans_doc)) + 
+  geom_bar(position = "dodge") + 
+  labs(title = "Difference in target variable between Spain and Italy",
+       x = "Country",
+       y = "Frequency") +  
+  scale_fill_manual(values = c("0" = "red3", "1" = "olivedrab3"),
+                    labels = c("No", "Yes")) +  
+  theme_minimal() +
+  theme(legend.title = element_blank())
+```
+
+In the previous graph we can observe that Spain support for transgender people to change their official documents to match their inner gender identity is much greater that the support given by Italian people. Now we will follow the results obtained in the explanatory to see if they help us understand the differences between these two countries.
+
+```{r}
+
+summary_data <- data_comparaison %>%
+  group_by(isocntry) %>%
+  summarise(
+    mean_age = mean(age, na.rm = TRUE),
+    perc_female = mean(as.numeric(female), na.rm = TRUE),  
+    mean_rain_ind = mean(rain_ind, na.rm = TRUE),
+    mean_gdp_pc = mean(gdp_pc, na.rm = TRUE),
+    mean_ideology = mean(ideology, na.rm = TRUE),
+    gdp = mean(gdp_pc, na.rm = TRUE),
+    rain_ind = mean(rain_ind, na.rm = TRUE),
+    religiosity_percent = mean(religiosity_percent, na.rm = TRUE)
+  )
+
+summary_data
+
+
+calculate_percentage <- function(data, var) {
+  data %>%
+    group_by(isocntry, !!sym(var)) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    group_by(isocntry) %>%
+    mutate(percentage = (count / sum(count)) * 100) %>%
+    select(isocntry, !!sym(var), percentage)
+}
+
+
+summary_occupation <- calculate_percentage(data_comparaison, "occupation")
+summary_religion <- calculate_percentage(data_comparaison, "religion")
+summary_satisfaction <- calculate_percentage(data_comparaison, "personal_satis")
+summary_contact_lgtbi <- calculate_percentage(data_comparaison, "contact_lgbti")
+```
+
+Based on these results, we can conclude that, on average, Italians have less contact with individuals from the LGBTI community, tend to be more right-leaning, and report lower personal satisfaction. At the country level, Italy exhibits a higher level of religiosity and a lower Rainbow Indicator compared to Spain. In other aspects, both countries share similar characteristics. Given these factors, our explanatory model effectively accounts for the differences observed between Italy and Spain, demonstrating its validity in this context.
