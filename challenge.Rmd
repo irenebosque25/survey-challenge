@@ -632,6 +632,11 @@ ggplot(data_descriptive, aes(x = religiosity_percent, y = rain_ind, label = isoc
 
 ```
 
+Both graphs explore the relationship between the Rainbow Indicator, which measures LGBTQ+ rights and inclusivity, and two different country lavel factors: GDP per capita in the first graph and Religiosity Percentage in the second. Countries are classified by region, with red representing Eastern Europe and light blue representing Western/Northern Europe.
+
+In the first graph (GDP per capita vs Rainbow Indicator), a pattern emerges where countries with higher GDP per capita tend to have higher Rainbow Indicator scores but not very significant, suggesting that wealthier nations generally provide greater LGBTQ+ rights and protections. Western and Northern European countries, which are typically wealthier, cluster toward the upper right, indicating both strong economies and progressive LGBTQ+ policies. Conversely, many Eastern European countries, which have lower GDP per capita, also tend to have lower Rainbow Indicator scores, reflecting more restrictive policies on LGBTQ+ rights. However, there are exceptions, such as Greece (GR), which, despite being in Eastern Europe, appears to have a relatively progressive stance on LGBTQ+ rights compared to its neighbors or Italy, which despite being in Occident Europe has a surprisingly low Rainbow Indicator. 
+
+In the second graph, which plots Religiosity Percentage against the Rainbow Indicator, the relationship appears weaker and less clearly defined compared to the first graph. Two of the most notable outliers are Czechia (CZ), which has one of the lowest levels of religiosity in Eastern Europe yet does not rank particularly high on the Rainbow Indicator. This suggests that while secularization may play a role in advancing LGBTQ+ rights, it is not the only determining factor.
 
 ```{r}
 #Distribution of the Political Ideology by Country
@@ -647,6 +652,7 @@ ggplot(data_descriptive, aes(x = reorder(isocntry, ideology, FUN = median, na.rm
   
 
 ```
+
 This boxplot visualization illustrates the distribution of political ideology across countries, measured on a 1 to 10 scale, where 1 represents left-wing views and 10 represents right-wing views. The countries are arranged from left to right based on their median ideological positioning, with lighter shades representing more left-leaning countries and darker shades indicating more right-leaning ones.
 
 Almost every Western and Northern European countries, such as Austria (AT), Belgium (BE), Denmark (DK), and Finland (FI), show a more center median ideology, with a broader distribution of responses. In contrast, Eastern and Southern European countries, including Slovakia (SK), Hungary (HU), Latvia (LV), and Romania (RO), display higher median scores, indicating a more right-leaning population. 
@@ -879,6 +885,7 @@ str(data)
 Then, we check for the multicollinearity in our model:
 
 ```{r}
+#| eval: false
 model <- glm(trans_doc ~ scale(age) + 
                female + 
                religion + 
@@ -907,6 +914,7 @@ We use the Variance Inflation Factor (VIF) to identify highly correlated predict
 Next, we test different models to identify key factors influencing support for transgender individuals' right to decide on their own document.
 
 ```{r}
+#| eval: false
 model2 <- glmer(trans_doc ~ 
                   scale(age) + 
                   female + 
@@ -946,6 +954,7 @@ We started with model2, a generalized linear mixed-effects model that includes a
 In model4, we extended the complexity further by adding additional interaction terms and quadratic terms, similar to model3. This model includes interactions like religion and religiosity percent, personal satisfaction and self-determination, and contact with LGBTI people with variables such as rain index and self-determination. We also included the interaction between ideology and GDP per capita and social class with the Gini index.
 
 ```{r}
+#| eval: false
 model4 <- glmer(trans_doc ~ 
                   scale(age) + 
                   I(scale(age)^2) + 
@@ -973,6 +982,7 @@ However, after reviewing the results, we found that certain variables, such as s
 In model5, we included additional variables and interactions, while also refining the previous interactions. This model examines the impact of variables like age, gender, religion, occupation, and their interactions, such as religion with religiosity percentage, contact with LGBTI people with rain index, and ideology with GDP per capita.
 
 ```{r}
+#| eval: false
 model5 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
@@ -1000,6 +1010,7 @@ Similar to the previous results, we found that Gini, contact with LGBTI people, 
 In model6, we further refined the model by removing non-significant variables from previous iterations, resulting in a more streamlined approach
 
 ```{r}
+#| eval: false
 model6 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
@@ -1022,6 +1033,7 @@ After evaluating the results, we found that marital status was not significant i
 
 In model7, we further simplified the model by removing marital status based on the previous findings.
 ```{r}
+#| eval: false
 model7 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
@@ -1042,6 +1054,7 @@ summary(model7)
 In model8, we introduced random slopes alongside random intercepts. Specifically, we modeled age, gender (female), and ideology as having random slopes by country. The random intercepts allow for country-specific baselines, and the random slopes allow us to capture how the relationships between these predictors and the target variable may differ between countries.
 
 ```{r}
+#| eval: false
 model8 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(age ^ 2) + 
@@ -1069,6 +1082,7 @@ In step_model, we continued refining the model by incorporating both age and its
 The model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
 
 ```{r}
+#| eval: false
 step_model <- glmer(trans_doc ~ 
                   scale(age) + 
                   I(scale(age)^2) +
@@ -1317,6 +1331,7 @@ dtProb <- predict(dtFit, testing2, type = "prob")
 prediction <- as.factor(ifelse(dtProb[,2] > 0.5, "Yes", "No"))
 
 testing2$trans_doc <- factor(testing2$trans_doc)
+test_country_fi$trans_doc <- factor(test_country_fi$trans_doc)
 
 confusionMatrix(prediction, testing2$trans_doc)$table
 confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
@@ -1332,13 +1347,20 @@ caret.fit
 rpart.plot(caret.fit$finalModel)
 
 dtProb <- predict(caret.fit, testing2, type = "prob")
+dtProb_fi <- predict(caret.fit, test_country_fi, type = "prob")
 
 prediction <- as.factor(ifelse(dtProb[,2] > 0.5, "Yes", "No"))
+prediction_fi <- as.factor(ifelse(dtProb_fi[,2] > 0.5, "Yes", "No"))
 
 confusionMatrix(prediction, testing2$trans_doc)$table
 confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
 
+confusionMatrix(prediction_fi, test_country_fi$trans_doc)$table
+confusionMatrix(prediction_fi, test_country_fi$trans_doc)$overall[1:2]
+
 ```
+
+By using decision tree, besides getting a better prediction than in the previous models, we can also observe how the variables are used to classified the observations.
 
 ## Random Forest 
 
@@ -1354,12 +1376,161 @@ rfFit <- train(trans_doc ~ .,
 plot(rfFit)
 
 rfProb <- predict(rfFit, testing2, type="prob")
+rfProb_fi <- predict(rfFit, test_country_fi, type = "prob")
+
 prediction <- as.factor(ifelse(rfProb[,2] > 0.5, "Yes", "No"))
+prediction_fi <- as.factor(ifelse(rfProb_fi[,2] > 0.2, "Yes", "No"))
 
 confusionMatrix(prediction, testing2$trans_doc)$table
 confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
 
+
+
+confusionMatrix(prediction_fi, test_country_fi$trans_doc)$table
+confusionMatrix(prediction_fi, test_country_fi$trans_doc)$overall[1:2]
 ```
+The Random Forest model delivers the best results in terms of accuracy and balance between sensitivity and specificity. However, in the specific case of Finland, it performs poorly in predicting opposition to the gender-change measure.
+
+#Finally, for an extra analysis we will analyze the paradata from the survey
+```{r}
+# read data
+rm(list = ls())
+survey <- read_dta("data/ZA7575.dta")
+```
+
+
+```{r}
+# load variables 
+paradata <- survey %>% 
+  select(c(country, isocntry, qc19, d60, p3, p4, p5))
+#p3 -> minutes the interview lasted
+#p4 -> Number of persons present during the interview
+#p5 -> respondent cooperation
+
+```
+
+
+```{r}
+# transform data in order to work correctly with the variables
+paradata <- paradata %>% 
+  mutate(
+    trans_name_na = if_else(qc19 == 3, 1, 0), 
+    difficulties_bills = as.factor(if_else(d60 == 4, NA, d60)),
+    int_minutes = p3, 
+    int_persons = as.factor(p4), 
+    int_cooperation = as.factor(p5) 
+  ) 
+
+# Country names: DE-E and DE-W were problems 
+paradata <- paradata |>   
+  mutate(country = country_name(isocntry, to = "simple", 
+                                verbose = TRUE, poor_matches = TRUE),
+         isocntry = countrycode::countrycode(
+           country, origin = "country.name", destination = "iso2c"))
+
+# NAs by country: Here we are creating a table with the proportion of NA's in the target variable in every country
+na_country <- paradata %>% 
+  group_by(country, isocntry) %>% 
+  summarise(
+    na_target = sum(trans_name_na), 
+    total_values = n()
+  ) %>% 
+  mutate(
+    na_proportion = (na_target / total_values)
+  ) 
+
+# Here we are creating a table with the proportion of response NO in the target variable in every country
+na_country_plot <- na_country %>%
+  left_join(paradata %>% filter(qc19 == 2) %>%
+              group_by(country) %>%
+              summarise(count_qc19_no = n()) %>%
+              ungroup(),
+            by = "country") %>%
+  mutate(
+    proportion_qc19_no = count_qc19_no / total_values 
+  )
+```
+
+
+```{r}
+# tables, plots ----------------------------------
+
+p <- ggplot(na_country, 
+            aes(x = reorder(country, -na_proportion), 
+                y = na_proportion, 
+                fill = na_proportion)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = percent(na_proportion, accuracy = 1)), 
+            position = position_stack(vjust = 0.5), 
+            color = "white", 
+            size = 2) +
+  labs(x = "", y = "Proportion of NA", 
+       title = "Proportion of NA in Qc_19 by Country", 
+       subtitle = "Ordered by Proportion",
+       x = "country",
+       y = "% of missing values") +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+        axis.title = element_text(size = 12),
+        plot.title = element_text(size = 16, face = "bold"),
+        plot.subtitle = element_text(size = 12),
+        legend.position = "none") +
+  guides(fill = guide_legend(reverse = TRUE))
+
+ggplotly(p, tooltip = "text")
+```
+
+
+This chart illustrates the proportion of missing values (NA) in the target variable across different countries. We notice that Eastern European countries (like Bulgaria, Poland, and Slovakia) tend to have higher NA rates, while Western European countries (like Belgium, Austria, and the Netherlands) have lower ones. Notably, there appears to be a potential relationship between the proportion of missing data and levels of support for the trans movement, as countries with higher NA rates are often those with lower reported support. To assess this possible correlation, we will conduct further analysis using a scatterplot.
+
+```{r}
+# Relationship between NA's and No responses in Qc19 by country
+p <- ggplot(na_country_plot, aes(x = na_proportion, y = proportion_qc19_no, text = country)) +
+  geom_point(aes(color = proportion_qc19_no), size = 3, shape = 21, stroke = 1, fill = "white") +  
+  geom_smooth(method = "lm", se = FALSE, color = "red3", linewidth = 1.5, linetype = "solid") +  
+  scale_color_gradientn(colors = "darkblue") +  
+  labs(
+    title = "Relationship between NA's and No responses in Qc19 by country",
+    x = "NA Proportion",
+    y = "No Responses Proportion"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
+    legend.position = "none",  # Mostrar leyenda
+    panel.grid.major = element_line(color = "grey80", linetype = "dashed"),
+    panel.grid.minor = element_blank()
+  )
+
+
+lm_model <- lm(proportion_qc19_no ~ na_proportion, data = na_country_plot)
+
+regression_line <- data.frame(
+  na_proportion = seq(min(na_country_plot$na_proportion), max(na_country_plot$na_proportion), length.out = 100),
+  proportion_qc19_no = predict(lm_model, newdata = data.frame(na_proportion = seq(min(na_country_plot$na_proportion), max(na_country_plot$na_proportion), length.out = 100)))
+)
+
+ggplotly(p, tooltip = "text") %>%
+  add_lines(data = regression_line, x = ~na_proportion, y = ~proportion_qc19_no, 
+            line = list(color = 'orange', width = 1), name = 'Línea de regresión')
+```
+
+The scatterplot suggests a positive correlation between NA proportion and "No" responses to the question on transgender rights. This could indicate that in countries with more missing responses, there is also greater reluctance to support legal gender changes. Possible explanations include social desirability bias, where respondents prefer to skip rather than explicitly oppose, lack of awareness or engagement with the issue, or cultural and political factors that make the topic more sensitive.
+
+
+```{r}
+# model ------------------------------------------
+model <- glm(trans_name_na ~ 
+               difficulties_bills + 
+               int_minutes + 
+               int_persons + 
+               int_cooperation, 
+             data = paradata, 
+             family = "binomial")
+summary(model)
+```
+
+This model predicts the probability of having a NA  in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
 
 
 # Conclusions
