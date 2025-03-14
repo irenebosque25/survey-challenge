@@ -1,6 +1,6 @@
 ---
 title: "Challenge: Discrimination in the EU"
-author: "Mafalda González, David Pereiro, Irene Bosque y Pablo Aísa"
+author: "Pablo Aísa, Irene Bosque, Mafalda González and David Pereiro"
 output: html_document
 date: "2025-03-14"
 ---
@@ -10,6 +10,10 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Introduction
+
+This study aims to understand the factors behind the support or rejection of transgender rights in Europe. For this purpose, we will use the Special Eurobarometer 493, which focuses on several people's perceptions, attitudes and opinions of discrimination based on personal characteristics.
+
+To understand this support, we will focus specifically on the variable of support for transgender people to change their official documents to match their inner gender identity (QC19). This variable is analysed through cross-country differences and to develop a predictive model for other countries. To do this, we selected individual-level variables from the Eurobarometer survey alongside country-level indicators from external sources. These variables capture key demographic, social, and political factors influencing attitudes towards transgender rights.
 
 ```{r}
 library(tidyverse)
@@ -36,9 +40,9 @@ library(rpart.plot)
 
 # Data cleaning
 
-To analyse the effect of different country-level characteristics we have obtained data from the [World Bank](https://www.worldbank.org/ext/en/home), [ILGA Europe (Rainbow Map)](https://rainbowmap.ilga-europe.org/) and from the [Trans Rights Indicator Project by Harvard University](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/FXXLTS).
-
 ## Country-level variables
+
+To analyse the effect of different country-level characteristics we have obtained data from the [World Bank](https://www.worldbank.org/ext/en/home), [ILGA Europe (Rainbow Map)](https://rainbowmap.ilga-europe.org/) and from the [Trans Rights Indicator Project by Harvard University](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/FXXLTS).
 
 ```{r}
 # Religiosity-----------------------------------------------
@@ -147,6 +151,10 @@ rainbow <- rainbow |>
 
 ## Individual level variables from the survey
 
+In this section we will select the individual level variables included in the survey that could be relevant for the analysis.
+
+To avoid possible errors in the subsequent models and to facilitate the interpretation and analysis of the variables, we carried out an initial recoding of the variables we selected.
+
 ```{r}
 survey <- read_dta("data/ZA7575.dta")
 
@@ -247,9 +255,9 @@ individual_data <- filtered_survey |>
          contact_lgbti, social_class, occupation)
 ```
 
-## Structural Cleaning and Final Merge 
+## Structural Cleaning and Final Merge
 
-Before merging all datasets and proceeding with the analysis, we conducted an initial assessment of their characteristics to verify data consistency and ensure a reliable analytical process.
+Before merging all data sets and proceeding with the analysis, we conducted an initial assessment of their characteristics to verify data consistency and ensure a reliable analytical process.
 
 ```{r}
 str(individual_data)
@@ -259,7 +267,7 @@ str(trans)
 str(rainbow)
 ```
 
-We observe some inconsistencies in two fo the data sets: individual_data and religiosity. The problem with the variables in these data sets is that they contain attributes, some are labeled doubles (dbl+lbl), some are not proper factors, etc. This will make working with the data, imputing it, making models as well as making predictions much harder. Hence, it is highly important to clean the data set structurally before continuing. 
+We observe some inconsistencies in two data sets: *individual_data* and *religiosity*. The problem with the variables in these data sets is that they contain attributes, some are labeled doubles (dbl+lbl), some are not proper factors, etc. This will make working with the data, imputing it, making models as well as making predictions much harder. Hence, it is highly important to clean the data set structurally before continuing.
 
 We first proceed with the individual_data data set:
 
@@ -315,7 +323,7 @@ religiosity <- religiosity |>
 
 ```
 
-Now, we can finally merge all the datasets using left_join: 
+Now, we can finally merge all the datasets using left_join:
 
 ```{r}
 # Final merge
@@ -327,6 +335,8 @@ data_descriptive <- individual_data |>
 ```
 
 ## Other interesting variables from the survey
+
+In the survey used for this project there are several questions that deal with issues related to discrimination towards different minorities, as well as support for their rights and freedoms. In order to complete the analysis of support for transgender people, we thought it would be appropriate to add more variables dealing with this issue and not only the question on gender reassignment in official documents. These variables will not be included in the models later.
 
 ```{r}
 
@@ -360,7 +370,6 @@ other_variables <- other_variables |>
 other_variables <- other_variables |> 
   select(child_love, trans_pol, trans_school, isocntry)
 ```
-
 
 # Descriptive analysis
 
@@ -518,7 +527,7 @@ The majority of respondents identify as Christian, while a notable percentage re
 
 Regarding personal satisfaction, a significant majority report being satisfied with their lives, whereas only a small minority express dissatisfaction. The self-reported social class distribution indicates that most respondents identify as middle or working class, while a much smaller portion considers themselves part of the high class. Similarly, the occupation distribution reveals that most individuals are either employed or retired, while students, the self-employed, and the unemployed represent smaller proportions.
 
-Finally, contact with the LGBTI community reveals a notable divide, with a substantial portion of respondents reporting no contact with LGBTI individuals, while a significant number indicate prior interaction. This variable is particularly relevant, as previous research suggests that personal exposure to LGBTI individuals can influence attitudes toward their rights. 
+Finally, contact with the LGBTI community reveals a notable divide, with a substantial portion of respondents reporting no contact with LGBTI individuals, while a significant number indicate prior interaction. This variable is particularly relevant, as previous research suggests that personal exposure to LGBTI individuals can influence attitudes toward their rights.
 
 ```{r}
 ggplot(data_descriptive, aes(x = age)) +
@@ -532,7 +541,6 @@ ggplot(data_descriptive, aes(x = age)) +
 Next, we observe the age distribution of the respondents in the dataset. The distribution appears right-skewed, indicating that there are fewer younger participants and a greater proportion of middle-aged and older respondents. The density increases gradually, peaking around 50 to 70 years old, before sharply declining beyond 75 years.The smoother density curve (red line) confirms the overall trend, highlighting multiple local peaks, particularly around 30, 50, and 70 years old, before declining toward the upper age limit of the sample.
 
 Overall, the distribution supports the earlier summary statistics, where the median age was reported at 53 years, with the youngest quartile at 37 years or younger and the oldest quartile at 66 years or older. The relatively low representation of younger individuals could influence the overall attitudinal patterns observed in the study.
-
 
 ## Variable Distribution by Country
 
@@ -609,8 +617,6 @@ ggplot(data_descriptive, aes(x = gdp_pc, y = rain_ind, label = isocntry)) +
     legend.position = "top")
 ```
 
-
-
 ```{r}
 ggplot(data_descriptive, aes(x = religiosity_percent, y = rain_ind, label = isocntry)) +
   geom_point(aes(color = case_when(
@@ -634,7 +640,7 @@ ggplot(data_descriptive, aes(x = religiosity_percent, y = rain_ind, label = isoc
 
 Both graphs explore the relationship between the Rainbow Indicator, which measures LGBTQ+ rights and inclusivity, and two different country lavel factors: GDP per capita in the first graph and Religiosity Percentage in the second. Countries are classified by region, with red representing Eastern Europe and light blue representing Western/Northern Europe.
 
-In the first graph (GDP per capita vs Rainbow Indicator), a pattern emerges where countries with higher GDP per capita tend to have higher Rainbow Indicator scores but not very significant, suggesting that wealthier nations generally provide greater LGBTQ+ rights and protections. Western and Northern European countries, which are typically wealthier, cluster toward the upper right, indicating both strong economies and progressive LGBTQ+ policies. Conversely, many Eastern European countries, which have lower GDP per capita, also tend to have lower Rainbow Indicator scores, reflecting more restrictive policies on LGBTQ+ rights. However, there are exceptions, such as Greece (GR), which, despite being in Eastern Europe, appears to have a relatively progressive stance on LGBTQ+ rights compared to its neighbors or Italy, which despite being in Occident Europe has a surprisingly low Rainbow Indicator. 
+In the first graph (GDP per capita vs Rainbow Indicator), a pattern emerges where countries with higher GDP per capita tend to have higher Rainbow Indicator scores but not very significant, suggesting that wealthier nations generally provide greater LGBTQ+ rights and protections. Western and Northern European countries, which are typically wealthier, cluster toward the upper right, indicating both strong economies and progressive LGBTQ+ policies. Conversely, many Eastern European countries, which have lower GDP per capita, also tend to have lower Rainbow Indicator scores, reflecting more restrictive policies on LGBTQ+ rights. However, there are exceptions, such as Greece (GR), which, despite being in Eastern Europe, appears to have a relatively progressive stance on LGBTQ+ rights compared to its neighbors or Italy, which despite being in Occident Europe has a surprisingly low Rainbow Indicator.
 
 In the second graph, which plots Religiosity Percentage against the Rainbow Indicator, the relationship appears weaker and less clearly defined compared to the first graph. Two of the most notable outliers are Czechia (CZ), which has one of the lowest levels of religiosity in Eastern Europe yet does not rank particularly high on the Rainbow Indicator. This suggests that while secularization may play a role in advancing LGBTQ+ rights, it is not the only determining factor.
 
@@ -655,12 +661,11 @@ ggplot(data_descriptive, aes(x = reorder(isocntry, ideology, FUN = median, na.rm
 
 This boxplot visualization illustrates the distribution of political ideology across countries, measured on a 1 to 10 scale, where 1 represents left-wing views and 10 represents right-wing views. The countries are arranged from left to right based on their median ideological positioning, with lighter shades representing more left-leaning countries and darker shades indicating more right-leaning ones.
 
-Almost every Western and Northern European countries, such as Austria (AT), Belgium (BE), Denmark (DK), and Finland (FI), show a more center median ideology, with a broader distribution of responses. In contrast, Eastern and Southern European countries, including Slovakia (SK), Hungary (HU), Latvia (LV), and Romania (RO), display higher median scores, indicating a more right-leaning population. 
+Almost every Western and Northern European countries, such as Austria (AT), Belgium (BE), Denmark (DK), and Finland (FI), show a more center median ideology, with a broader distribution of responses. In contrast, Eastern and Southern European countries, including Slovakia (SK), Hungary (HU), Latvia (LV), and Romania (RO), display higher median scores, indicating a more right-leaning population.
 
 However, Spain is particularly interesting because, although its median ideology is similar to that of many other countries, the overall distribution is skewed to the left, meaning a larger proportion of respondents identify as left-wing compared to right-wing. This suggests that while the central tendency remains balanced, there is a stronger leftist presence in the country.
 
-In contrast, some countries like the Czech Republic (CZ), Cyprus (CY), and Estonia (EE) exhibit the opposite trend. Their median scores remain relatively moderate, yet the distribution skews towards the right, implying a larger proportion of right-leaning individuals compared to left-leaning ones. 
-
+In contrast, some countries like the Czech Republic (CZ), Cyprus (CY), and Estonia (EE) exhibit the opposite trend. Their median scores remain relatively moderate, yet the distribution skews towards the right, implying a larger proportion of right-leaning individuals compared to left-leaning ones.
 
 ## Bivariate Analysis with Target Variable
 
@@ -681,7 +686,7 @@ mapCountryData(map_data,
 
 This choropleth map illustrates the level of support for transgender individuals' right to change their official documents, our target variable, across different European countries. The color gradient, ranging from light blue (low support) to dark blue (high support), visually represents the variation in attitudes toward this issue.
 
-Western and Northern European countries, such as Spain, Portugal, the Netherlands, Belgium, and the Nordic countries, exhibit the highest levels of support, as indicated by the darkest shades of blue. This pattern aligns with broader trends of progressive LGBTI policies and strong legal protections in these regions. France and Germany show similarly high levels of support, though not as strong. 
+Western and Northern European countries, such as Spain, Portugal, the Netherlands, Belgium, and the Nordic countries, exhibit the highest levels of support, as indicated by the darkest shades of blue. This pattern aligns with broader trends of progressive LGBTI policies and strong legal protections in these regions. France and Germany show similarly high levels of support, though not as strong.
 
 In contrast, Central and Eastern European countries, including Poland, Hungary, and several Balkan states, show significantly lower levels of support, as reflected by the lighter shades. These countries tend to have more conservative social attitudes and restrictive legal frameworks regarding transgender rights. Italy stands out with surprisingly low support compared to other Western European nations. This suggests that despite being a major Western European country, Italy remains more conservative on transgender issues.
 
@@ -710,7 +715,8 @@ ggplot(data_descriptive, aes(x = as.factor(trans_doc), y = religiosity_percent, 
   theme(legend.position = "none")
 
 ```
-These two boxplots examine the relationship between support for transgender individuals' right to change their official documents and two factors: political ideology and religiosity. 
+
+These two boxplots examine the relationship between support for transgender individuals' right to change their official documents and two factors: political ideology and religiosity.
 
 In the first boxplot (Political Ideology vs. Support for Trans Documents), the median ideology score is similar across groups, meaning that those who support (green) and oppose (red) document changes have roughly the same central tendency. However, a key difference emerges in the distribution of responses: those who oppose the right to change documents have a longer right-leaning tail, indicating a higher presence of strongly right-wing individuals in this group. In contrast, supporters have a more centralized distribution, meaning they are not necessarily strongly left-wing, but rather clustered around moderate-left to centrist views. The NA category (gray) also has a similar median but a broader spread, covering both left- and right-leaning respondents more evenly.
 
@@ -718,7 +724,7 @@ The second boxplot (Religiosity vs. Support for Trans Documents) presents a slig
 
 In summary, while there are some observable differences in political ideology and religiosity between those who support or oppose transgender rights, they are not highly significant. The distributions indicate that attitudes toward transgender document changes are influenced by multiple factors, with ideology and religiosity playing a role but not being the sole determinants.
 
-## Other variables related to transgender persons
+## Other variables related to transgender people
 
 ```{r}
 # Boxplot 1: trans_child
@@ -751,17 +757,21 @@ b <- b1 / b2
 b
 ```
 
+These two graphs show the distributions from 1-10 grouped by country for the questions on how respondents feel if a transgender person reaches the highest political position in their country and how they would feel if one of their children is in love with a transgender person. 
+
+These graphs show that the distribution of countries is similar to that initially presented for the dependent variable. The countries that are most supportive of transgender people do so for all variables, not only for the change of official documents.
+
 # Mice imputation
 
-Before continuing to the models we take a look at missing values in the original Eurobarometer dataset and the possibility to impute them. We did the descriptive analysis without previous imputation as we perceived that descriptive makes only sense with the original dataset and the real values we know to be true. 
+Before continuing to the models we take a look at missing values in the original Eurobarometer dataset and the possibility to impute them. We did the descriptive analysis without previous imputation as we perceived that descriptive makes only sense with the original dataset and the real values we know to be true.
 
-First, we take a look at the NA distribution of the Eurobarometer dataset. 
+First, we take a look at the NA distribution of the Eurobarometer dataset.
 
 ```{r}
 colSums(is.na(individual_data))
 ```
 
-The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. trans_doc has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid and serialid as it could confuse our mice imputation. 
+The variables with most missing values are *ideology*, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and *social_class*, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and *contact_lgbti* has 494 NAs. *Trans_doc* has 3280 NAs, but we will not impute it as it is our target variable. The variables *marital_status* and *personal_satis* have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove *caseid* and *serialid* as it could confuse our mice imputation.
 
 ```{r}
 mice_data <- individual_data %>% 
@@ -776,10 +786,10 @@ mice_data <- mice_data %>%
 colSums(is.na(mice_data))
 
 ```
-We are left with 4599 NAs for ideology, 472 NAs for contact_lgbti, 448 NAs for religion and 973 NAs for social class. 
 
-First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. 
-As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
+We are left with 4599 NAs for ideology, 472 NAs for contact_lgbti, 448 NAs for religion and 973 NAs for social class.
+
+First, we are going to manually look at the different imputation methods and strategies to understand how close they come to the original dataset. As there are factor and numerical variables, the best options to test tje imputation are Random Forest and Pmm methods.
 
 ```{r}
 imputed_comparison <- data.frame(
@@ -794,7 +804,7 @@ imputed_comparison <- data.frame(
 
 The m and the maxit arguments are = 3 to reduce loading time without losing so much information.
 
-The next step is to plot the results to compare the resulting distributions: 
+The next step is to plot the results to compare the resulting distributions:
 
 ```{r}
 # Arguments for the plot 
@@ -823,15 +833,15 @@ plot_mice <- ggplot(data_imputed_long, aes(x = value, fill = title)) +
 plot_mice
 ```
 
-TODO: short interpretation 
+As can be seen, both methods present very similar distributions for the ideology variable compared to the original one. This means that both methods predict values correctly for the ideological location variable.
 
-Now, we go ahead with the imputation of the complete dataset. We use m = 3, as our missing values range between 5% and 20% of the observations. Hence, m=3 is still powerful enough to have reasonable imputation. 
+The next step will be to perform this imputation for the rest of the dataset. We will use m = 3, as our missing values range between 5% and 20% of the observations. Hence, m=3 is still powerful enough to have reasonable imputation and it will reduce the loading time. 
 
 ```{r}
 init = mice(mice_data, m = 3, seed = 123)
 ```
 
-For our target variable trans_doc we set method="", so that it is not imputed. 
+For our target variable trans_doc we set method="", so that it is not imputed.
 
 ```{r}
 meth = init$method
@@ -849,7 +859,7 @@ summary(imputed_data)
 
 ## Merging datasets again
 
-For modeling, the best would be to use the function `with()` and all 3 generated datasets of mice, which would give us a better result but also take more time. Due to practicality and the point of the exercise not being focused on perfect mice usage, we take the decision of extracting and keep working with only one of the datasets. 
+For modeling, the best would be to use the function `with()` and all 3 generated datasets of mice, which would give us a better result but also take more time. Due to practicality and the point of the exercise not being focused on perfect mice usage, we take the decision of extracting and keep working with only one of the datasets.
 
 ```{r}
 imputed_data_complete <- complete(imputed_data)
@@ -911,6 +921,8 @@ vif(model)
 
 We use the Variance Inflation Factor (VIF) to identify highly correlated predictor variables. In the results, the GVIF values indicate that the multicollinearity is not problematic, as most VIFs are below 2. This suggests there is no significant multicollinearity between the individual variables and collective variables, ensuring reliable coefficient estimates and proper interpretation of each variable’s effect.
 
+In every model, we incorporate both age and its squared term (age\^2) to compare differences. The rationale behind this is that the linear term (age) and the quadratic term (age\^2) work together to model a curvilinear relationship. Even though age itself may not be significant, we retain it in the model because the combined effect of both terms allows for capturing a potential non-linear relationship with the target variable. This helps to better model the relationship between age and support for transgender rights.
+
 Next, we test different models to identify key factors influencing support for transgender individuals' right to decide on their own document.
 
 ```{r}
@@ -949,7 +961,7 @@ model3 <- glmer(trans_doc ~
 summary(model3)
 ```
 
-We started with model2, a generalized linear mixed-effects model that includes a random intercept for each country to account for country-specific variation. Then, we tried model3, a more complex model that includes interaction terms (e.g., religion and religiosity, marital status and religiosity) to capture more nuanced relationships. Some variables like age, self-determination, and GDP per capita were not significant on their own, but interactions like religion and marital status showed relevance. 
+We started with model2, a generalized linear mixed-effects model that includes a random intercept for each country to account for country-specific variation. Then, we tried model3, a more complex model that includes interaction terms (e.g., religion and religiosity, marital status and religiosity) to capture more nuanced relationships. Some variables like age, self-determination, and GDP per capita were not significant on their own, but interactions like religion and marital status showed relevance.
 
 In model4, we extended the complexity further by adding additional interaction terms and quadratic terms, similar to model3. This model includes interactions like religion and religiosity percent, personal satisfaction and self-determination, and contact with LGBTI people with variables such as rain index and self-determination. We also included the interaction between ideology and GDP per capita and social class with the Gini index.
 
@@ -977,7 +989,7 @@ summary(model4)
 
 ```
 
-However, after reviewing the results, we found that certain variables, such as self-determination, personal satisfaction, Gini, and social class, were not significant. 
+However, after reviewing the results, we found that certain variables, such as self-determination, personal satisfaction, Gini, and social class, were not significant.
 
 In model5, we included additional variables and interactions, while also refining the previous interactions. This model examines the impact of variables like age, gender, religion, occupation, and their interactions, such as religion with religiosity percentage, contact with LGBTI people with rain index, and ideology with GDP per capita.
 
@@ -1032,6 +1044,7 @@ summary(model6)
 After evaluating the results, we found that marital status was not significant in predicting support for transgender rights.
 
 In model7, we further simplified the model by removing marital status based on the previous findings.
+
 ```{r}
 #| eval: false
 model7 <- glmer(trans_doc ~ 
@@ -1077,9 +1090,7 @@ ranef(model8) |>  # This is for extracting random intercepts and slopes
 
 The random effects output shows how intercepts and slopes vary by country. The (Intercept) column represents country-specific deviations from the overall intercept. The scale(age), female1, and scale(ideology) columns indicate how these predictors' effects differ across countries. The values suggest small but varying influences of age, gender, and ideology on the target variable, depending on the country.
 
-In step_model, we continued refining the model by incorporating both age and its squared term (age^2). The rationale behind this is that the linear term (age) and the quadratic term (age^2) work together to model a curvilinear relationship. Even though age itself may not be significant, we retain it in the model because the combined effect of both terms allows for capturing a potential non-linear relationship with the target variable. This helps to better model the relationship between age and support for transgender rights.
-
-The model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
+The next model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
 
 ```{r}
 #| eval: false
@@ -1125,13 +1136,46 @@ final_model <- glmer(trans_doc ~
                     family = "binomial",
                     data = data)
 
-summary(final_model)
+covariate_labels <- c(
+  "Age of respondent", 
+  "Age of respondent (squared)", 
+  "Gender of respondent (female)", 
+  "Occupation of participant: Retired", 
+  "Occupation of participant: Self employed", 
+  "Occupation of participant: Student", 
+  "Occupation of participant: Unemployed",
+  "Religious affiliation of participant: Muslims", 
+  "Religious affiliation of participant: Not religious", 
+  "Religious affiliation of participant: Orthodox Christian", 
+  "Religious affiliation of participant: Other religions", 
+  "Religiosity of the country's population (%)", 
+  "Personal satisfaction of participants: Satisfied", 
+  "Contact with LGBTI community of participant: No Contact",  
+  "Rainbow Europe Country Indicator", 
+  "Law in favor of Gender identity self-determination in a country: Exists", 
+  "Ideology scale of participant", 
+  "GDP of countries (%) ", 
+  "Interaction between Muslim religion of participant and percentage of religiosity in the country", 
+  "Interaction between No religion of participant and percentage of religiosity in the country", 
+  "Interaction between Orthodox Christian religion of participant and percentage of religiosity in the country",
+  "Interaction between Other religion of participant and percentage of religiosity in the country", 
+  "Interaction between participant having No contact with LGBTI community and Rainbow Europe Country Indicator",  
+  "Interaction between ideology of a participant and GDP (%) of a country"
+)
+
+
+stargazer(final_model, type = "text",
+          covariate.labels = covariate_labels,
+          title = "Regression Results",
+          dep.var.labels = "Dependent Variable: Trans Name",
+          star.cutoffs = c(0.05, 0.01, 0.001),
+          digits = 3)
 
 lme4::ranef(final_model) %>% 
   str 
 ```
 
-In final_model, we have refined the model to include both age and its squared term (age^2), maintaining them together to model a curvilinear relationship between age and the target variable. 
+In final_model, we have refined the model to include both age and its squared term (age\^2), maintaining them together to model a curvilinear relationship between age and the target variable.
 
 This final_model is chosen over the step_model, despite having a higher AIC, because the step_model reduces this metric spuriously by eliminating variables that, although not individually significant, contribute theoretical coherence and explanatory value to the model. Over-simplification can falsely improve the AIC without actually leading to a better fit.
 
@@ -1207,7 +1251,7 @@ confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 
 ```
 
-We obtain a pretty good accuracy 
+We obtain a pretty good accuracy
 
 # K-NN
 
@@ -1253,6 +1297,7 @@ prediction <- as.factor(ifelse(knnProb[,2] > 0.5, "Yes", "No"))
 confusionMatrix(prediction, testing$trans_doc)$table
 confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 ```
+
 This model has a little worst accuracy than the our explanatory model.
 
 ## Decision trees
@@ -1362,7 +1407,7 @@ confusionMatrix(prediction_fi, test_country_fi$trans_doc)$overall[1:2]
 
 By using decision tree, besides getting a better prediction than in the previous models, we can also observe how the variables are used to classified the observations.
 
-## Random Forest 
+## Random Forest
 
 ```{r}
 rfFit <- train(trans_doc ~ ., 
@@ -1389,15 +1434,18 @@ confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
 confusionMatrix(prediction_fi, test_country_fi$trans_doc)$table
 confusionMatrix(prediction_fi, test_country_fi$trans_doc)$overall[1:2]
 ```
+
 The Random Forest model delivers the best results in terms of accuracy and balance between sensitivity and specificity. However, in the specific case of Finland, it performs poorly in predicting opposition to the gender-change measure.
 
-#Finally, for an extra analysis we will analyze the paradata from the survey
+# Paradata
+
+Finally, for an extra analysis we will analyze the paradata from the survey.
+
 ```{r}
 # read data
 rm(list = ls())
 survey <- read_dta("data/ZA7575.dta")
 ```
-
 
 ```{r}
 # load variables 
@@ -1408,7 +1456,6 @@ paradata <- survey %>%
 #p5 -> respondent cooperation
 
 ```
-
 
 ```{r}
 # transform data in order to work correctly with the variables
@@ -1451,7 +1498,6 @@ na_country_plot <- na_country %>%
   )
 ```
 
-
 ```{r}
 # tables, plots ----------------------------------
 
@@ -1479,7 +1525,6 @@ p <- ggplot(na_country,
 
 ggplotly(p, tooltip = "text")
 ```
-
 
 This chart illustrates the proportion of missing values (NA) in the target variable across different countries. We notice that Eastern European countries (like Bulgaria, Poland, and Slovakia) tend to have higher NA rates, while Western European countries (like Belgium, Austria, and the Netherlands) have lower ones. Notably, there appears to be a potential relationship between the proportion of missing data and levels of support for the trans movement, as countries with higher NA rates are often those with lower reported support. To assess this possible correlation, we will conduct further analysis using a scatterplot.
 
@@ -1517,7 +1562,6 @@ ggplotly(p, tooltip = "text") %>%
 
 The scatterplot suggests a positive correlation between NA proportion and "No" responses to the question on transgender rights. This could indicate that in countries with more missing responses, there is also greater reluctance to support legal gender changes. Possible explanations include social desirability bias, where respondents prefer to skip rather than explicitly oppose, lack of awareness or engagement with the issue, or cultural and political factors that make the topic more sensitive.
 
-
 ```{r}
 # model ------------------------------------------
 model <- glm(trans_name_na ~ 
@@ -1530,7 +1574,6 @@ model <- glm(trans_name_na ~
 summary(model)
 ```
 
-This model predicts the probability of having a NA  in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
-
+This model predicts the probability of having a NA in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
 
 # Conclusions
