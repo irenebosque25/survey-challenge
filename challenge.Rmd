@@ -547,7 +547,7 @@ Overall, the distribution supports the earlier summary statistics, where the med
 Next, we analyze the contextual differences between the countries surveyed in the dataset.
 
 ```{r}
-#Contact with LGTBI community by country
+# Contact with LGTBI community by country
 country_order <- data_descriptive %>%
   filter(!is.na(contact_lgbti)) %>%
   group_by(isocntry) %>%
@@ -645,7 +645,7 @@ In the first graph (GDP per capita vs Rainbow Indicator), a pattern emerges wher
 In the second graph, which plots Religiosity Percentage against the Rainbow Indicator, the relationship appears weaker and less clearly defined compared to the first graph. Two of the most notable outliers are Czechia (CZ), which has one of the lowest levels of religiosity in Eastern Europe yet does not rank particularly high on the Rainbow Indicator. This suggests that while secularization may play a role in advancing LGBTQ+ rights, it is not the only determining factor.
 
 ```{r}
-#Distribution of the Political Ideology by Country
+# Distribution of the Political Ideology by Country
 
 ggplot(data_descriptive, aes(x = reorder(isocntry, ideology, FUN = median, na.rm = TRUE), y = ideology, fill = isocntry)) +
   geom_boxplot() +
@@ -655,7 +655,6 @@ ggplot(data_descriptive, aes(x = reorder(isocntry, ideology, FUN = median, na.rm
   theme(axis.text.x = element_text(angle = 45, hjust = 1),
         legend.position = "none") +  
    scale_fill_manual(values = colorRampPalette(brewer.pal(9, "Blues"))(28))
-  
 
 ```
 
@@ -865,8 +864,6 @@ For modeling, the best would be to use the function `with()` and all 3 generated
 imputed_data_complete <- complete(imputed_data)
 
 write.csv(imputed_data_complete, "imputed_data_complete.csv")
-# my_data <- read.csv("imputed_data_complete.csv")
-
 ```
 
 ```{r}
@@ -1090,7 +1087,7 @@ ranef(model8) |>  # This is for extracting random intercepts and slopes
 
 The random effects output shows how intercepts and slopes vary by country. The (Intercept) column represents country-specific deviations from the overall intercept. The scale(age), female1, and scale(ideology) columns indicate how these predictors' effects differ across countries. The values suggest small but varying influences of age, gender, and ideology on the target variable, depending on the country.
 
-The next model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
+The next model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rainbow index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
 
 ```{r}
 #| eval: false
@@ -1194,10 +1191,10 @@ The second set will follow the same 70/30 structure but with a crucial differenc
 ```{r}
 set.seed(123)
 
-# reinsert serialid to be able to pinpoint observations 
+# Reinsert serialid to be able to pinpoint observations 
 data$serialid <- serialid 
 
-# training and testing set 
+# Training and testing set 
 training <- data %>%
   group_by(isocntry) %>%
   sample_frac(0.7) %>%
@@ -1206,14 +1203,14 @@ training <- data %>%
 testing <- data %>%
   anti_join(training, by = c("serialid")) 
 
-# remove serialid from the model dataset
+# Remove serialid from the model dataset
 training <- training %>%
   select(-serialid)
 
 testing <- testing  %>%
   select(-serialid) 
 
-# training model 
+# Training model 
 final_model <- glmer(trans_doc ~ 
                        scale(age) + 
                        I(scale(age)^2) +
@@ -1234,24 +1231,24 @@ final_model <- glmer(trans_doc ~
 
 summary(final_model)
 
-# complete cases 
+# Complete cases 
 training <- training[complete.cases(training), ]
 testing <- testing[complete.cases(testing), ]
 
-# prediction
+# Prediction
 pred <- predict(final_model, newdata = testing, type = "response")
 
-# pred() worked: 
+# Pred() worked: 
 prediction <- as.factor(ifelse(pred > 0.5, 1, 0))
 
-# final: 
+# Final: 
 confusionMatrix(prediction, testing$trans_doc)
 confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 
 
 ```
 
-We obtain a pretty good accuracy
+We obtain a pretty good accuracy.
 
 # K-NN
 
@@ -1324,7 +1321,7 @@ test_country_fi <- data |>
     TRUE ~ NA
   ))
 
-# training and testing set 
+# Training and testing set 
 training2 <- no_fi %>%
   group_by(isocntry) %>%
   sample_frac(0.7) %>%
@@ -1336,7 +1333,7 @@ test_no_fi <- no_fi %>%
 testing2 <- test_no_fi |> 
   bind_rows(test_country_fi)
 
-# remove serialid from the model dataset
+# Remove serialid from the model dataset
 training2 <- training2 %>%
   select(-c(serialid, isocntry))
 
@@ -1444,10 +1441,8 @@ Finally, for an extra analysis we will analyze the paradata from the survey.
 ```{r}
 # read data
 survey <- read_dta("data/ZA7575.dta")
-```
 
-```{r}
-# load variables 
+# Load variables 
 paradata <- survey %>% 
   select(c(country, isocntry, qc19, d60, p3, p4, p5))
 #p3 -> minutes the interview lasted
@@ -1457,7 +1452,7 @@ paradata <- survey %>%
 ```
 
 ```{r}
-# transform data in order to work correctly with the variables
+# Transform data in order to work correctly with the variables
 paradata <- paradata %>% 
   mutate(
     trans_name_na = if_else(qc19 == 3, 1, 0), 
@@ -1498,7 +1493,7 @@ na_country_plot <- na_country %>%
 ```
 
 ```{r}
-# tables, plots ----------------------------------
+# Tables, plots --------------------------------------------
 
 p <- ggplot(na_country, 
             aes(x = reorder(country, -na_proportion), 
@@ -1525,7 +1520,9 @@ p <- ggplot(na_country,
 ggplotly(p, tooltip = "text")
 ```
 
-This chart illustrates the proportion of missing values (NA) in the target variable across different countries. We notice that Eastern European countries (like Bulgaria, Poland, and Slovakia) tend to have higher NA rates, while Western European countries (like Belgium, Austria, and the Netherlands) have lower ones. Notably, there appears to be a potential relationship between the proportion of missing data and levels of support for the trans movement, as countries with higher NA rates are often those with lower reported support. To assess this possible correlation, we will conduct further analysis using a scatterplot.
+This chart illustrates the proportion of missing values (NA) in the target variable across different countries. We notice that Eastern European countries (like Bulgaria, Poland, and Slovakia) tend to have higher NA rates, while Western European countries (like Belgium, Austria, and the Netherlands) have lower ones. 
+
+Notably, it appears to be a potential relationship between the proportion of missing data and levels of support for the trans movement, as countries with higher NA rates are often those with lower reported support. To assess this possible correlation, we will conduct further analysis using a scatterplot.
 
 ```{r}
 # Relationship between NA's and No responses in Qc19 by country
@@ -1541,7 +1538,7 @@ p <- ggplot(na_country_plot, aes(x = na_proportion, y = proportion_qc19_no, text
   theme_minimal(base_size = 14) +
   theme(
     plot.title = element_text(face = "bold", size = 14, hjust = 0.5),
-    legend.position = "none",  # Mostrar leyenda
+    legend.position = "none",
     panel.grid.major = element_line(color = "grey80", linetype = "dashed"),
     panel.grid.minor = element_blank()
   )
@@ -1556,13 +1553,13 @@ regression_line <- data.frame(
 
 ggplotly(p, tooltip = "text") %>%
   add_lines(data = regression_line, x = ~na_proportion, y = ~proportion_qc19_no, 
-            line = list(color = 'orange', width = 1), name = 'Línea de regresión')
+            line = list(color = 'orange', width = 1), name = 'Regression line')
 ```
 
 The scatterplot suggests a positive correlation between NA proportion and "No" responses to the question on transgender rights. This could indicate that in countries with more missing responses, there is also greater reluctance to support legal gender changes. Possible explanations include social desirability bias, where respondents prefer to skip rather than explicitly oppose, lack of awareness or engagement with the issue, or cultural and political factors that make the topic more sensitive.
 
 ```{r}
-# model ------------------------------------------
+# Model ---------------------------------------------------
 model <- glm(trans_name_na ~ 
                difficulties_bills + 
                int_minutes + 
@@ -1573,7 +1570,11 @@ model <- glm(trans_name_na ~
 summary(model)
 ```
 
-This model predicts the probability of having a NA in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
+This model predicts the probability of having a NA in trans_name_na based on factors such as payment difficulties, interview duration, number of people present, and respondent cooperation. For payment difficulties, severe difficulties (difficulties_bills7) significantly increase the probability of not responding to the trans_doc question. 
+
+However, other categories of difficulties (difficulties_bills2 and difficulties_bills3) do not show strong effects, although difficulties_bills3 suggests a slight increase in probability.The interview time has no significant effect on the probability of trans_doc being NA, as its p-value is high. Similarly, the number of people present does not show a clear effect, though having three people present (int_persons3) decreases the probability of trans_name_na being NA. 
+
+Finally, respondent cooperation has a positive and significant effect on the probability of not responding to the qc_19 question. The more cooperative the respondent, the higher the probability that trans_name_na will be 1, with a particularly notable increase for higher levels of cooperation. In summary, the main variables significantly affecting the probability of trans_name_na being 1 are payment difficulties and respondent cooperation, while interview time and number of people present have no relevant effect.
 
 # Conclusions
 
@@ -1602,7 +1603,6 @@ ggplot(data_comparaison, aes(x = isocntry, fill = trans_doc)) +
 In the previous graph we can observe that Spain support for transgender people to change their official documents to match their inner gender identity is much greater that the support given by Italian people. Now we will follow the results obtained in the explanatory to see if they help us understand the differences between these two countries.
 
 ```{r}
-
 summary_data <- data_comparaison %>%
   group_by(isocntry) %>%
   summarise(
@@ -1618,7 +1618,25 @@ summary_data <- data_comparaison %>%
 
 summary_data
 
+summary_numeric_long <- summary_data %>%
+  pivot_longer(cols = -isocntry, names_to = "variable", values_to = "value")
 
+ggplot(summary_numeric_long, aes(x = isocntry, y = value, fill = isocntry)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~ variable, scales = "free") +  
+  labs(title = "Comparison of Means by Country",
+       x = "Country",
+       y = "Average Value") +
+  scale_fill_manual(
+    values = c(
+      "ES" = "red4",
+      "IT" = "darkgreen"
+    ))+
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
 calculate_percentage <- function(data, var) {
   data %>%
     group_by(isocntry, !!sym(var)) %>%
@@ -1633,6 +1651,89 @@ summary_occupation <- calculate_percentage(data_comparaison, "occupation")
 summary_religion <- calculate_percentage(data_comparaison, "religion")
 summary_satisfaction <- calculate_percentage(data_comparaison, "personal_satis")
 summary_contact_lgtbi <- calculate_percentage(data_comparaison, "contact_lgbti")
+
+ggplot(summary_occupation, aes(x = isocntry, y = percentage, fill = occupation)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  labs(title = "Distribution of occupation by country",
+       x = "Country",
+       y = "Percentage") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold", family = "Roboto"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, family = "Roboto", margin = margin(b = 20)),
+    axis.text.x = element_text(size = 11, family = "Roboto", color = "black"),
+    axis.text.y = element_text(size = 11, family = "Roboto", color = "black"),
+    legend.title = element_text(size = 11, family = "Roboto", face = "bold"),
+    legend.text = element_text(size = 10, family = "Roboto"),
+    legend.box.background = element_rect(color = "black", size = 0.5),
+    plot.margin = margin(15, 15, 15, 15),
+    legend.key.size = unit(1, "lines")
+  )
+
+ggplot(summary_religion, aes(x = isocntry, y = percentage, fill = religion)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  labs(title = "Distribution of religion by country",
+       x = "Country",
+       y = "Percentage") +
+  scale_fill_brewer(palette = "RdYlBu") +
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold", family = "Roboto"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, family = "Roboto", margin = margin(b = 20)),
+    axis.text.x = element_text(size = 11, family = "Roboto", color = "black"),
+    axis.text.y = element_text(size = 11, family = "Roboto", color = "black"),
+    legend.title = element_text(size = 11, family = "Roboto", face = "bold"),
+    legend.text = element_text(size = 10, family = "Roboto"),
+    legend.box.background = element_rect(color = "black", size = 0.5),
+    plot.margin = margin(15, 15, 15, 15),
+    legend.key.size = unit(1, "lines"))
+  
+
+ggplot(summary_satisfaction, aes(x = isocntry, y = percentage, fill = personal_satis)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  labs(title = "Distribution of personal satisfaction by country",
+       x = "Country",
+       y = "Percentage") +
+  scale_fill_manual(
+    values = c(
+      "Not satisfied" = "red3",
+      "Satisfied" = "olivedrab3"
+    ))+
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold", family = "Roboto"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, family = "Roboto", margin = margin(b = 20)),
+    axis.text.x = element_text(size = 11, family = "Roboto", color = "black"),
+    axis.text.y = element_text(size = 11, family = "Roboto", color = "black"),
+    legend.title = element_text(size = 11, family = "Roboto", face = "bold"),
+    legend.text = element_text(size = 10, family = "Roboto"),
+    legend.box.background = element_rect(color = "black", size = 0.5),
+    plot.margin = margin(15, 15, 15, 15),
+    legend.key.size = unit(1, "lines"))
+
+
+ggplot(summary_contact_lgtbi, aes(x = isocntry, y = percentage, fill = contact_lgbti)) +
+  geom_bar(stat = "identity", position = "fill", color = "black") +
+  labs(title = "Distribution of Contact LGBTI by country",
+       x = "Country",
+       y = "Percentage") +
+  scale_fill_manual(
+    values = c(
+      "No contact" = "red3",
+      "Contact" = "olivedrab3"
+    ))+
+  theme_minimal() +
+  theme(
+    strip.text = element_text(size = 14, face = "bold", family = "Roboto"),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5, family = "Roboto", margin = margin(b = 20)),
+    axis.text.x = element_text(size = 11, family = "Roboto", color = "black"),
+    axis.text.y = element_text(size = 11, family = "Roboto", color = "black"),
+    legend.title = element_text(size = 11, family = "Roboto", face = "bold"),
+    legend.text = element_text(size = 10, family = "Roboto"),
+    legend.box.background = element_rect(color = "black", size = 0.5),
+    plot.margin = margin(15, 15, 15, 15),
+    legend.key.size = unit(1, "lines"))
 ```
 
 Based on these results, we can conclude that, on average, Italians have less contact with individuals from the LGBTI community, tend to be more right-leaning, and report lower personal satisfaction. At the country level, Italy exhibits a higher level of religiosity and a lower Rainbow Indicator compared to Spain. In other aspects, both countries share similar characteristics. Given these factors, our explanatory model effectively accounts for the differences observed between Italy and Spain, demonstrating its validity in this context.
