@@ -27,9 +27,16 @@ library(rworldmap)
 library(janitor)
 library(car)
 library(lme4)
+library(ggplot2)
+library(RColorBrewer)
+library(caret)
+library(rpart)
+library(rpart.plot)
 ```
 
 # Data cleaning
+
+To analyse the effect of different country-level characteristics we have obtained data from the [World Bank](https://www.worldbank.org/ext/en/home), [ILGA Europe (Rainbow Map)](https://rainbowmap.ilga-europe.org/) and from the [Trans Rights Indicator Project by Harvard University](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/FXXLTS).
 
 ## Country-level variables
 
@@ -150,7 +157,7 @@ survey <- survey |>
 
 # Recode dependent variable 
 filtered_survey <- survey |> 
-  mutate(trans_name = case_when(
+  mutate(trans_doc = case_when(
     qc19==1 ~ 1,
     qc19==2 ~ 0,
     qc19==3 ~ NA)) 
@@ -235,7 +242,7 @@ filtered_survey <- filtered_survey |>
            country, origin = "country.name", destination = "iso2c"))
   
 individual_data <- filtered_survey |> 
-  select(caseid, serialid, isocntry, trans_name, female, age, religion, 
+  select(caseid, serialid, isocntry, trans_doc, female, age, religion, 
          marital_status, personal_satis, ideology, 
          contact_lgbti, social_class, occupation)
 ```
@@ -269,7 +276,7 @@ individual_data <- individual_data %>%
     social_class = as.factor(social_class),
 
     # factor variables => proper factors
-    trans_name = factor(trans_name),
+    trans_doc = factor(trans_doc),
     female = factor(female),
     contact_lgbti = factor(contact_lgbti),
     religion = factor(religion),
@@ -363,7 +370,7 @@ other_variables <- other_variables |>
 plot_intro(data_descriptive)
 ```
 
-Before diving into an in-depth analysis of the dataset, we first examine its key characteristics using this plot_intro. We observe that 52.9% of the dataset consists of discrete variables, while 47.1% are continuous. Additionally, 70.4% of the rows are complete, meaning they contain no missing values in any variable. The total percentage of missing values is minimal, accounting for just 2.4%.
+Before diving into an in-depth analysis of the dataset, we first examine its key characteristics using this plot_intro. We observe that 55.6% of the dataset consists of discrete variables, while 44.4% are continuous. Additionally, 71.3% of the rows are complete, meaning they contain no missing values in any variable. The total percentage of missing values is minimal, accounting for just 2.1%.
 
 ```{r}
 str(data_descriptive)
@@ -379,29 +386,29 @@ The dataset includes both individual-level variables, which capture personal cha
 
 These variables reflect personal attributes, experiences, and attitudes:
 
--   **caseid**: Unique identifier for each participant.
+-   **serialid**: Unique identifier for each participant.
 
 -   **isocntry**: Categorical variable distinguishing respondents by country (28 EU member states).
 
--   **trans_name**: The key variable of this study, measuring attitudes toward the right of transgender individuals to officially change their name and gender. It is binary, with values of 0 (opposition) and 1 (support). In this dataset, 59.9% of participants expressed support.
+-   **trans_doc**: The key variable of this study, measuring attitudes toward the right of transgender individuals to officially change their name and gender. It is binary, with values of 0 (opposition) and 1 (support). In this dataset, 59.9% of participants expressed support.
 
 -   **female**: 54.5% of the sample are women (14,946), while 45.5% are men (12,492).
 
 -   **age**: Ranges from 15 to 98 years, with a median age of 53. The youngest 25% of respondents are aged 37 or younger, while the oldest 25% are 66 or older. This indicates a relatively older sample, which is relevant for analyzing attitudes, as previous studies have highlighted generational differences in the acceptance of LGBTI rights.
 
--   **religion**: captures respondents' religious affiliations, showing that a majority identify as Christian, with a smaller proportion reporting no religious affiliation. 
+-   **religion**: captures respondents' religious affiliations, showing that a majority identify as Christian, with a smaller proportion reporting no religious affiliation.
 
 -   **marital_status**: reflects participants’ relationship status, which may provide insight into how family experiences shape attitudes toward the transgender community.
 
 -   **personal_satis**: Categorical variable representing personal life satisfaction, which could be linked to more open or restrictive attitudes.
 
--   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions. 
+-   **ideology**: A key political scale for analyzing ideological influence. Measured on a 1 to 10 scale, with a median of 5 and a mean of 5.3, suggesting a distribution centered around moderate positions.
 
--   **contact_lgbti**: assesses prior exposure to LGBTI individuals, an important factor in reducing prejudice, with a division between those who have had contact and those who have not. 
+-   **contact_lgbti**: assesses prior exposure to LGBTI individuals, an important factor in reducing prejudice, with a division between those who have had contact and those who have not.
 
 -   **social_class**: Self-perceived social class, indicating the respondent’s socioeconomic context.
 
--   **occupation**: Employment status, allowing us to explore the influence of workplace environments. 
+-   **occupation**: Employment status, allowing us to explore the influence of workplace environments.
 
 #### **Country-Level Contextual Variables:**
 
@@ -413,13 +420,14 @@ In addition to individual-level factors, we incorporate aggregated national indi
 
 -   **gini**: Measures economic inequality at the national level and helps assess its impact on attitudes. Ranges from 24.1% to 39%, with a mean of 30.8%.
 
--   **gdp_pc (GDP per capita)**: Examines the relationship between economic development and attitudes.Ranges from \$9,820 to \$106,343, with a mean of \$34,577.
+-   **gdp_pc (GDP per capita)**: Examines the relationship between economic development and attitudes.Ranges from \$9,820 to \$106,343, with a mean of \$34,577. The units are constant prices of 2015 in dollars to allow us to account for the inflation.
 
 -   **religiosity_percent**: Percentage of the population that identifies as religious, which is crucial for exploring cultural and religious influences on attitudes.Values range from 21.49% to 100%, with a median of 81.16%.
 
 ```{r}
 corr_data <- data_descriptive |> 
-  select(trans_name, age, ideology, rain_ind, gini, gdp_pc, religiosity_percent)
+  select(trans_doc, age, ideology, rain_ind, gini, gdp_pc, religiosity_percent) |> 
+  mutate(trans_doc = as.numeric(trans_doc))
 
 corr_matrix <- cor(corr_data, use = "complete.obs")
 
@@ -434,8 +442,6 @@ This correlation matrix highlights that support for transgender rights is signif
 First of all, we proceed to analyze the distribution of the individual variables in our dataset:
 
 ```{r, fig.width=12}
-font_add_google("Voces", "voces")
-showtext_auto()
 
 # Religion
 g1 <- ggplot(data_descriptive, aes(x = religion)) +
@@ -506,7 +512,7 @@ g
 
 ```
 
-One of the first aspects to analyze is the distribution of categorical variables in the dataset, which, as previously noted, account for 52.9% of the total data. The set of bar charts provides an overview of key individual characteristics, highlighting patterns in religious identification, marital status, personal satisfaction, social class, occupation, and contact with the LGBTI community.
+One of the first aspects to analyze is the distribution of categorical variables in the dataset, which, as previously noted, account for 55.6% of the total data. The set of bar charts provides an overview of key individual characteristics, highlighting patterns in religious identification, marital status, personal satisfaction, social class, occupation, and contact with the LGBTI community.
 
 The majority of respondents identify as Christian, while a notable percentage report no religious affiliation, and smaller proportions belong to other religious groups such as Muslims and Orthodox Christians. In terms of marital status, the most represented group consists of married individuals, followed by single respondents, while divorced and widowed participants form smaller segments of the sample.
 
@@ -517,12 +523,13 @@ Finally, contact with the LGBTI community reveals a notable divide, with a subst
 ```{r}
 ggplot(data_descriptive, aes(x = age)) +
   geom_histogram(aes(y = ..density..), bins = 30, fill = "steelblue", alpha = 0.6) +
-  geom_density(color = "red", size = 1) +
+  geom_density(color = "red", linewidth = 1) +
   theme_minimal() +
   labs(title = "Age Distribution", x = "Age", y = "Density")
 
 ```
-On the other hand, we observe the age distribution of the respondents in the dataset. The distribution appears right-skewed, indicating that there are fewer younger participants and a greater proportion of middle-aged and older respondents. The density increases gradually, peaking around 50 to 70 years old, before sharply declining beyond 75 years.The smoother density curve (red line) confirms the overall trend, highlighting multiple local peaks, particularly around 30, 50, and 70 years old, before declining toward the upper age limit of the sample.
+
+Next, we observe the age distribution of the respondents in the dataset. The distribution appears right-skewed, indicating that there are fewer younger participants and a greater proportion of middle-aged and older respondents. The density increases gradually, peaking around 50 to 70 years old, before sharply declining beyond 75 years.The smoother density curve (red line) confirms the overall trend, highlighting multiple local peaks, particularly around 30, 50, and 70 years old, before declining toward the upper age limit of the sample.
 
 Overall, the distribution supports the earlier summary statistics, where the median age was reported at 53 years, with the youngest quartile at 37 years or younger and the oldest quartile at 66 years or older. The relatively low representation of younger individuals could influence the overall attitudinal patterns observed in the study.
 
@@ -570,39 +577,38 @@ mapCountryData(map_data,
                mapRegion = "Europe")
 
 ```
+
 These two visualizations illustrate the distribution of contact with the LGBTI community across countries, highlighting significant regional differences in social exposure to LGBTI individuals.
 
 The first bar chart presents the proportion of respondents in each country who report having contact with LGBTI individuals (green) versus those who do not (red), with a small portion of missing responses (gray). Countries are arranged from left to right based on decreasing levels of respondents lacking contact with the LGBTI community. Romania, Bulgaria, Poland, and several other Eastern European countries show the highest levels of non-contact, while the Netherlands, Sweden, and other Western and Northern European nations report the highest levels of contact. This suggests a strong regional divide in familiarity with LGBTI individuals.
 
 The second map visually reinforces this divide, categorizing countries based on whether a majority of respondents reported having contact with the LGBTI community. Western and Northern European countries (in green) generally show higher exposure with the exception of Portugal, while Eastern and Southern European countries (in red) report lower levels of contact.
 
-
 ```{r}
-#Interactive Plot GDP per capita vs Rainbow Indicator per Country
 western_northern <- c("AT", "BE", "DK", "FI", "FR", "DE", "IE", "IS", "LU", "NL", "NO", "SE", "CH", "ES", "PT", "IT", "GB", "MT")
 eastern <- c("BG", "CZ", "EE", "HU", "LT", "LV", "PL", "RO", "RU", "SK", "SI", "HR", "UA", "GR", "CY")
 
+data_descriptive$region <- case_when(
+  data_descriptive$isocntry %in% western_northern ~ "Western/Northern",
+  data_descriptive$isocntry %in% eastern ~ "Eastern",
+  TRUE ~ "Other"
+)
+
 ggplot(data_descriptive, aes(x = gdp_pc, y = rain_ind, label = isocntry)) +
-  geom_point(aes(color = case_when(
-    isocntry %in% western_northern ~ "Western/Northern",
-    isocntry %in% eastern ~ "Eastern",
-    TRUE ~ "Other")), size = 4, shape = 21, stroke = 1, fill = "white") +  
-  geom_text(size = 3, hjust = -0.6) +  # Ajusta el texto a la derecha
-  scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3", "Other" = "gray")) + 
-  theme_minimal(base_size = 14) +
+  geom_point(aes(color = region), size = 4, shape = 21, stroke = 1, fill = "white") +  
+  geom_text(size = 3, hjust = 1.6)  + 
+  theme_minimal() +
   labs(
     title = "GDP per capita vs Rainbow Indicator per Country",
     x = "GDP per capita",
-    y = "Religiosity Percentage",
+    y = "Rainbow Indicator",
     color = "Region"
   ) +
   theme(
     plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
-    legend.position = "top",
-    panel.grid.major = element_line(color = "grey80", linetype = "dashed"),
-    panel.grid.minor = element_blank()
-  )
+    legend.position = "top")
 ```
+
 
 
 ```{r}
@@ -615,8 +621,8 @@ ggplot(data_descriptive, aes(x = religiosity_percent, y = rain_ind, label = isoc
   scale_color_manual(values = c("Western/Northern" = "royalblue", "Eastern" = "red3", "Other" = "gray")) + 
   theme_minimal(base_size = 14) +
   labs(
-    title = "Religiosity vs Rainbow Indicator per Country",
-    x = "Religiosity",
+    title = "Religiosity Percentage vs Rainbow Indicator per Country",
+    x = "Religiosity Percentage",
     y = "Rainbow Indicator",
     color = "Region"
   ) +
@@ -654,12 +660,12 @@ In contrast, some countries like the Czech Republic (CZ), Cyprus (CY), and Eston
 
 ```{r}
 
-data_country <- aggregate(as.numeric(trans_name) ~ isocntry, data = data_descriptive, mean, na.rm = TRUE)
+data_country <- aggregate(as.numeric(trans_doc) ~ isocntry, data = data_descriptive, mean, na.rm = TRUE)
 
 map_data <- joinCountryData2Map(data_country, joinCode = "ISO2", nameJoinColumn = "isocntry")
 
 mapCountryData(map_data, 
-               nameColumnToPlot = "as.numeric(trans_name)", 
+               nameColumnToPlot = "as.numeric(trans_doc)", 
                mapTitle = "Support for change of Documents of the Trans Community per Country", 
                catMethod = "quantiles", 
                colourPalette = brewer.pal(9, "Blues"), 
@@ -674,7 +680,7 @@ Western and Northern European countries, such as Spain, Portugal, the Netherland
 In contrast, Central and Eastern European countries, including Poland, Hungary, and several Balkan states, show significantly lower levels of support, as reflected by the lighter shades. These countries tend to have more conservative social attitudes and restrictive legal frameworks regarding transgender rights. Italy stands out with surprisingly low support compared to other Western European nations. This suggests that despite being a major Western European country, Italy remains more conservative on transgender issues.
 
 ```{r}
-ggplot(data_descriptive, aes(x = as.factor(trans_name), y = ideology, fill = as.factor(trans_name))) + 
+ggplot(data_descriptive, aes(x = as.factor(trans_doc), y = ideology, fill = as.factor(trans_doc))) + 
   geom_boxplot(alpha = 0.6) + 
   theme_minimal() + 
   labs(title = "Political Ideology vs Support Trans Documents", 
@@ -687,7 +693,7 @@ ggplot(data_descriptive, aes(x = as.factor(trans_name), y = ideology, fill = as.
 ```
 
 ```{r}
-ggplot(data_descriptive, aes(x = as.factor(trans_name), y = religiosity_percent, fill = as.factor(trans_name))) +
+ggplot(data_descriptive, aes(x = as.factor(trans_doc), y = religiosity_percent, fill = as.factor(trans_doc))) +
   geom_boxplot(alpha = 0.6) +
   theme_minimal() +
   labs(title = "Religiosity vs Support Trans Documents", 
@@ -749,7 +755,7 @@ First, we take a look at the NA distribution of the Eurobarometer dataset.
 colSums(is.na(individual_data))
 ```
 
-The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. Trans_name has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid and serialid as it could confuse our mice imputation. 
+The variables with most missing values are ideology, with 4689 NAs, which supposes a 17% of missing data within the variable (5689/27438), and social_class, with 1021 NAs, making up 21% of the variable (5883/27438). Religion has 483 NAs and contact_lgbti has 494 NAs. trans_doc has 3280 NAs, but we will not impute it as it is our target variable. The variables marital_status and personal_satis have 68 and 102 NAs respectively. Due to the low number we can go ahead and simply remove the rows. We remove caseid and serialid as it could confuse our mice imputation. 
 
 ```{r}
 mice_data <- individual_data %>% 
@@ -819,14 +825,14 @@ Now, we go ahead with the imputation of the complete dataset. We use m = 3, as o
 init = mice(mice_data, m = 3, seed = 123)
 ```
 
-For our target variable trans_name we set method="", so that it is not imputed. 
+For our target variable trans_doc we set method="", so that it is not imputed. 
 
 ```{r}
 meth = init$method
 
 meth
 
-meth[c("trans_name")]=""
+meth[c("trans_doc")]=""
 
 imputed_data = mice(mice_data, method=meth, m=3, seed=123)
 ```
@@ -844,6 +850,7 @@ imputed_data_complete <- complete(imputed_data)
 
 write.csv(imputed_data_complete, "imputed_data_complete.csv")
 # my_data <- read.csv("imputed_data_complete.csv")
+
 ```
 
 ```{r}
@@ -864,12 +871,15 @@ data <- data |>
   mutate(gdp_pc = log(gdp_pc))
 
 data$contact_lgbti <- relevel(data$contact_lgbti, ref = "No contact")
+
+str(data)
+
 ```
 
 Then, we check for the multicollinearity in our model:
 
 ```{r}
-model <- glm(trans_name ~ scale(age) + 
+model <- glm(trans_doc ~ scale(age) + 
                female + 
                religion + 
                occupation + 
@@ -897,7 +907,7 @@ We use the Variance Inflation Factor (VIF) to identify highly correlated predict
 Next, we test different models to identify key factors influencing support for transgender individuals' right to decide on their own document.
 
 ```{r}
-model2 <- glmer(trans_name ~ 
+model2 <- glmer(trans_doc ~ 
                   scale(age) + 
                   female + 
                   religion +
@@ -913,7 +923,7 @@ model2 <- glmer(trans_name ~
 summary(model2)
 
 
-model3 <- glmer(trans_name ~ 
+model3 <- glmer(trans_doc ~ 
                   scale(age) + 
                   I(scale(age)^2) +
                   female + 
@@ -936,7 +946,7 @@ We started with model2, a generalized linear mixed-effects model that includes a
 In model4, we extended the complexity further by adding additional interaction terms and quadratic terms, similar to model3. This model includes interactions like religion and religiosity percent, personal satisfaction and self-determination, and contact with LGBTI people with variables such as rain index and self-determination. We also included the interaction between ideology and GDP per capita and social class with the Gini index.
 
 ```{r}
-model4 <- glmer(trans_name ~ 
+model4 <- glmer(trans_doc ~ 
                   scale(age) + 
                   I(scale(age)^2) + 
                   female + 
@@ -963,7 +973,7 @@ However, after reviewing the results, we found that certain variables, such as s
 In model5, we included additional variables and interactions, while also refining the previous interactions. This model examines the impact of variables like age, gender, religion, occupation, and their interactions, such as religion with religiosity percentage, contact with LGBTI people with rain index, and ideology with GDP per capita.
 
 ```{r}
-model5 <- glmer(trans_name ~ 
+model5 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
                   female + 
@@ -990,7 +1000,7 @@ Similar to the previous results, we found that Gini, contact with LGBTI people, 
 In model6, we further refined the model by removing non-significant variables from previous iterations, resulting in a more streamlined approach
 
 ```{r}
-model6 <- glmer(trans_name ~ 
+model6 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
                   female + 
@@ -1012,7 +1022,7 @@ After evaluating the results, we found that marital status was not significant i
 
 In model7, we further simplified the model by removing marital status based on the previous findings.
 ```{r}
-model7 <- glmer(trans_name ~ 
+model7 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(scale(age) ^ 2) + 
                   female + 
@@ -1032,7 +1042,7 @@ summary(model7)
 In model8, we introduced random slopes alongside random intercepts. Specifically, we modeled age, gender (female), and ideology as having random slopes by country. The random intercepts allow for country-specific baselines, and the random slopes allow us to capture how the relationships between these predictors and the target variable may differ between countries.
 
 ```{r}
-model8 <- glmer(trans_name ~ 
+model8 <- glmer(trans_doc ~ 
                   scale(age) +
                   I(age ^ 2) + 
                   female + 
@@ -1059,7 +1069,7 @@ In step_model, we continued refining the model by incorporating both age and its
 The model includes additional predictors like female, occupation, and religion interactions with religiosity_percent, along with other interaction terms such as contact_lgbti with rain index and ideology with GDP per capita. We also kept the random slopes for age, female, and ideology across countries, as these allow the effects of these variables to vary by country.
 
 ```{r}
-step_model <- glmer(trans_name ~ 
+step_model <- glmer(trans_doc ~ 
                   scale(age) + 
                   I(scale(age)^2) +
                   female + 
@@ -1084,7 +1094,7 @@ summary(step_model)
 The results showed that age (quadratic), gender, occupation, personal satisfaction, contact with LGBTI people, and ideology were relevant predictors. Additionally, interactions between religion and religiosity, as well as ideology and GDP, played a significant role. However, variables like marital status, social class, and the Gini index were not significant, leading to their exclusion in the final model:
 
 ```{r}
-final_model <- glmer(trans_name ~ 
+final_model <- glmer(trans_doc ~ 
                       scale(age) + 
                       I(scale(age)^2) +
                       female + 
@@ -1103,7 +1113,7 @@ final_model <- glmer(trans_name ~
 
 summary(final_model)
 
-lme4::ranef(model8) %>% 
+lme4::ranef(final_model) %>% 
   str 
 ```
 
@@ -1115,9 +1125,13 @@ Regarding the results, support for trans rights is influenced by several factors
 
 In terms of random effects, there is variation between countries in the intercept and in the slopes of age, gender, and ideology, indicating that these factors do not influence attitudes in the same way across national contexts. Overall, the model confirms that support for trans rights is a multifaceted phenomenon shaped by both individual and structural factors.
 
-# Predictive model
+# Predictive models
 
-## Training with group_by(countries) 
+For the predictive part of the model we are going to try the predictive capability of our explanatory model and after that we will try some machine learning techniques as K-nearest neighbours, decision trees and random forest.
+
+We will have two type of training and testing sets. The first one is going to be used in the prediction with the explanatory model and the knn and it will consist in a training set that will contain 70% of the data of each country and in a testing set that will have 30% of the data of each country. The reason behind this splitting is that in the explanatory model we will have random intercept and slopes for each country and in the knn is because it does not admit new levels.
+
+The second set will follow the same 70/30 structure but with a crucial difference—it will leave out one country entirely. This approach allows us to evaluate whether the models can generalize effectively to completely unseen datasets, providing a more robust test of their predictive performance.
 
 ```{r}
 set.seed(123)
@@ -1141,18 +1155,13 @@ training <- training %>%
 testing <- testing  %>%
   select(-serialid) 
 
-
-
 # training model 
-final_model <- glmer(trans_name ~ 
-                       scale(age) + # Cuando incluyes tanto age como age^2, 
-                       #el término lineal (age) y el término cuadrático (age^2) trabajan
-                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
-                       # no la vamos a eliminar
+final_model <- glmer(trans_doc ~ 
+                       scale(age) + 
                        I(scale(age)^2) +
                        female + 
                        occupation +
-                       religion*scale(religiosity_percent) +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
+                       religion*scale(religiosity_percent) +  
                        personal_satis +
                        contact_lgbti*scale(rain_ind) +
                        self_determination +
@@ -1168,351 +1177,189 @@ final_model <- glmer(trans_name ~
 summary(final_model)
 
 # complete cases 
-train <- training[complete.cases(training), ]
-test <- testing[complete.cases(testing), ]
+training <- training[complete.cases(training), ]
+testing <- testing[complete.cases(testing), ]
 
 # prediction
-pred <- predict(final_model, newdata = test, type = "response")
+pred <- predict(final_model, newdata = testing, type = "response")
 
 # pred() worked: 
 prediction <- as.factor(ifelse(pred > 0.5, 1, 0))
 
 # final: 
-confusionMatrix(prediction, test$trans_name)$table
-confusionMatrix(prediction, test$trans_name)$overall[1:2]
+confusionMatrix(prediction, testing$trans_doc)
+confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 
 
 ```
 
-Summary of the model: 
+We obtain a pretty good accuracy 
 
-```
-> summary(final_model)
-Generalized linear mixed model fit by maximum likelihood (Laplace
-  Approximation) [glmerMod]
- Family: binomial  ( logit )
-Formula: trans_name ~ scale(age) + I(scale(age)^2) + female + occupation +  
-    religion * scale(religiosity_percent) + personal_satis +  
-    contact_lgbti * scale(rain_ind) + self_determination + scale(ideology) *  
-    scale(gdp_pc) + (1 + scale(age) + female + scale(ideology) |  
-    isocntry)
-   Data: training
-Control: glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e+05))
-
-     AIC      BIC   logLik deviance df.resid 
- 18253.4  18524.0  -9091.7  18183.4    16797 
-
-Scaled residuals: 
-    Min      1Q  Median      3Q     Max 
--7.7042 -0.7378  0.3432  0.6528  4.5986 
-
-Random effects:
- Groups   Name            Variance Std.Dev. Corr             
- isocntry (Intercept)     0.22289  0.4721                    
-          scale(age)      0.03868  0.1967   -0.31            
-          female1         0.04215  0.2053    0.63 -0.01      
-          scale(ideology) 0.01806  0.1344   -0.82  0.26 -0.08
-Number of obs: 16832, groups:  isocntry, 28
-
-Fixed effects:
-                                                      Estimate Std. Error
-(Intercept)                                           -0.52058    0.12783
-scale(age)                                            -0.02680    0.04845
-I(scale(age)^2)                                       -0.06600    0.02281
-female1                                                0.39057    0.05474
-occupationRetired                                     -0.22608    0.06320
-occupationSelf employed                                0.14972    0.07341
-occupationStudent                                      0.29905    0.10137
-occupationUnemployed                                   0.03343    0.06729
-religionMuslims                                       -0.43853    0.16409
-religionNot religious                                  0.38864    0.05693
-religionOrthodox Chrsitian                            -0.05508    0.08798
-religionOther religions                               -0.09002    0.09448
-scale(religiosity_percent)                            -0.19284    0.09160
-personal_satisSatisfied                                0.35552    0.05257
-contact_lgbtiContact                                   0.89728    0.04253
-scale(rain_ind)                                        0.19638    0.11174
-self_determination1                                    0.44637    0.23033
-scale(ideology)                                       -0.20122    0.03209
-scale(gdp_pc)                                          0.25266    0.10800
-religionMuslims:scale(religiosity_percent)            -0.31704    0.27033
-religionNot religious:scale(religiosity_percent)       0.07324    0.04863
-religionOrthodox Chrsitian:scale(religiosity_percent)  0.21027    0.07579
-religionOther religions:scale(religiosity_percent)    -0.21164    0.07232
-contact_lgbtiContact:scale(rain_ind)                   0.06766    0.04361
-scale(ideology):scale(gdp_pc)                         -0.11946    0.03368
-                                                      z value Pr(>|z|)    
-(Intercept)                                            -4.072 4.65e-05 ***
-scale(age)                                             -0.553 0.580199    
-I(scale(age)^2)                                        -2.893 0.003810 ** 
-female1                                                 7.135 9.69e-13 ***
-occupationRetired                                      -3.577 0.000347 ***
-occupationSelf employed                                 2.039 0.041407 *  
-occupationStudent                                       2.950 0.003176 ** 
-occupationUnemployed                                    0.497 0.619276    
-religionMuslims                                        -2.672 0.007530 ** 
-religionNot religious                                   6.827 8.69e-12 ***
-religionOrthodox Chrsitian                             -0.626 0.531312    
-religionOther religions                                -0.953 0.340727    
-scale(religiosity_percent)                             -2.105 0.035261 *  
-personal_satisSatisfied                                 6.763 1.35e-11 ***
-contact_lgbtiContact                                   21.098  < 2e-16 ***
-scale(rain_ind)                                         1.758 0.078830 .  
-self_determination1                                     1.938 0.052627 .  
-scale(ideology)                                        -6.270 3.61e-10 ***
-scale(gdp_pc)                                           2.339 0.019312 *  
-religionMuslims:scale(religiosity_percent)             -1.173 0.240881    
-religionNot religious:scale(religiosity_percent)        1.506 0.132060    
-religionOrthodox Chrsitian:scale(religiosity_percent)   2.774 0.005530 ** 
-religionOther religions:scale(religiosity_percent)     -2.927 0.003426 ** 
-contact_lgbtiContact:scale(rain_ind)                    1.551 0.120837    
-scale(ideology):scale(gdp_pc)                          -3.547 0.000390 ***
----
-Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-
-Correlation matrix not shown by default, as p = 25 > 12.
-Use print(x, correlation=TRUE)  or
-    vcov(x)        if you need it
-
-optimizer (bobyqa) convergence code: 0 (OK)
-boundary (singular) fit: see help('isSingular')
-```
-
-confusionMatrix
-
-```
-> confusionMatrix(prediction, test$trans_name)$table
-          Reference
-Prediction    0    1
-         0 1711  840
-         1 1235 3439
-         
-> confusionMatrix(prediction, test$trans_name)$overall[1:2]
- Accuracy     Kappa 
-0.7128028 0.3926809 
-
-```
-
-## Training with caret
+# K-NN
 
 ```{r}
+ctrl <- trainControl(method = "repeatedcv", 
+                     number = 5,
+                     classProbs = T,
+                     summaryFunction=twoClassSummary,
+                     verboseIter = T)
 
-library(caret)
+training <- as.data.frame(training)
 
-# data_2 <- data %>% filter(!is.na(trans_name))
-# quitando NAs antes del modelo? 
+training$isocntry <- factor(training$isocntry)
+testing$isocntry <- factor(testing$isocntry)
 
-set.seed(123)
-in_train2 <- createDataPartition(data$trans_name, p = 0.7, list = FALSE)  # 70% for training
-training2 <- data[ in_train2,]
-testing2 <- data[-in_train2,]
+training <- training |> 
+  mutate(trans_doc = case_when(
+    trans_doc == "1" ~ "Yes",
+    trans_doc == "0" ~ "No",
+    TRUE ~ NA),
+    trans_doc = factor(trans_doc))
 
-final_model2 <- glmer(trans_name ~ 
-                       scale(age) + # Cuando incluyes tanto age como age^2, 
-                       #el término lineal (age) y el término cuadrático (age^2) trabajan
-                       # juntos para modelar una relación curvilínea, entonces aunque age no es significativa 
-                       # no la vamos a eliminar
-                       I(scale(age)^2) +
-                       female + 
-                       occupation +
-                       religion*scale(religiosity_percent) +  # Si la interacciín es significativa no debemos quitar las variables individuales aunque no lo sean
-                       personal_satis +
-                       contact_lgbti*scale(rain_ind) +
-                       self_determination +
-                       scale(ideology)*scale(gdp_pc) +
-                       (1  + scale(age) +
-                          female +
-                          scale(ideology)
-                        |isocntry), 
-                     family = binomial(link = "logit"),
-                     control = glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 100000)),
-                     data = training2)
+testing <- testing |> 
+  mutate(trans_doc = case_when(
+    trans_doc == "1" ~ "Yes",
+    trans_doc == "0" ~ "No",
+    TRUE ~ NA),
+    trans_doc = factor(trans_doc))
 
-summary(final_model2)
+str(training)
+knnFit <- train(trans_doc ~ ., 
+                data = training,
+                method = "kknn",   
+                preProc=c('scale','center'),
+                tuneLength = 10,
+                metric="ROC",
+                trControl = ctrl)
 
-train2 <- training2[complete.cases(training2), ] # quitando NAs despues del model 
-test2 <- testing2[complete.cases(testing2), ]
+knnProb <- predict(knnFit, testing, type="prob", )
+prediction <- as.factor(ifelse(knnProb[,2] > 0.5, "Yes", "No"))
 
-# colSums(is.na(testing))  # Check for missing values in testing
-pred2 <- predict(final_model2, newdata = test2, type = "response")
 
-# pred() worked: 
-prediction2 <- as.factor(ifelse(pred2 > 0.5, 1, 0))
-
-# final: 
-confusionMatrix(prediction2, test2$trans_name)$table
-confusionMatrix(prediction2, test2$trans_name)$overall[1:2]
-
+confusionMatrix(prediction, testing$trans_doc)$table
+confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 ```
+This model has a little worst accuracy than the our explanatory model.
 
-Summary of the model: 
+## Decision trees
 
-```
-> summary(final_model2)
-Generalized linear mixed model fit by maximum likelihood (Laplace
-  Approximation) [glmerMod]
- Family: binomial  ( logit )
-Formula: trans_name ~ scale(age) + I(scale(age)^2) + female + occupation +  
-    religion * scale(religiosity_percent) + personal_satis +  
-    contact_lgbti * scale(rain_ind) + self_determination + scale(ideology) *  
-    scale(gdp_pc) + (1 + scale(age) + female + scale(ideology) |  
-    isocntry)
-   Data: training2
-Control: glmerControl(optimizer = "bobyqa", optCtrl = list(maxfun = 1e+05))
-
-     AIC      BIC   logLik deviance df.resid 
- 18281.3  18551.9  -9105.6  18211.3    16806 
-
-Scaled residuals: 
-    Min      1Q  Median      3Q     Max 
--7.6508 -0.7384  0.3428  0.6549  5.3266 
-
-Random effects:
- Groups   Name            Variance Std.Dev. Corr             
- isocntry (Intercept)     0.24961  0.4996                    
-          scale(age)      0.03550  0.1884   -0.21            
-          female1         0.04647  0.2156    0.57  0.22      
-          scale(ideology) 0.01392  0.1180   -0.92  0.22 -0.22
-Number of obs: 16841, groups:  isocntry, 28
-
-Fixed effects:
-                                                      Estimate Std. Error
-(Intercept)                                           -0.63118    0.13411
-scale(age)                                            -0.06620    0.04728
-I(scale(age)^2)                                       -0.08304    0.02284
-female1                                                0.40374    0.05622
-occupationRetired                                     -0.13792    0.06342
-occupationSelf employed                                0.14178    0.07322
-occupationStudent                                      0.29189    0.09997
-occupationUnemployed                                   0.09313    0.06756
-religionMuslims                                       -0.54324    0.16224
-religionNot religious                                  0.39073    0.05705
-religionOrthodox Chrsitian                             0.05237    0.08811
-religionOther religions                               -0.18230    0.09296
-scale(religiosity_percent)                            -0.23696    0.09523
-personal_satisSatisfied                                0.39932    0.05227
-contact_lgbtiContact                                   0.90247    0.04243
-scale(rain_ind)                                        0.21266    0.11379
-self_determination1                                    0.52020    0.25144
-scale(ideology)                                       -0.18644    0.02956
-scale(gdp_pc)                                          0.20579    0.11594
-religionMuslims:scale(religiosity_percent)            -0.21164    0.29125
-religionNot religious:scale(religiosity_percent)       0.11296    0.04840
-religionOrthodox Chrsitian:scale(religiosity_percent)  0.27646    0.07560
-religionOther religions:scale(religiosity_percent)    -0.23650    0.07022
-contact_lgbtiContact:scale(rain_ind)                   0.07158    0.04361
-scale(ideology):scale(gdp_pc)                         -0.10888    0.03246
-                                                      z value Pr(>|z|)    
-(Intercept)                                            -4.707 2.52e-06 ***
-scale(age)                                             -1.400 0.161470    
-I(scale(age)^2)                                        -3.636 0.000277 ***
-female1                                                 7.181 6.90e-13 ***
-occupationRetired                                      -2.175 0.029664 *  
-occupationSelf employed                                 1.936 0.052818 .  
-occupationStudent                                       2.920 0.003503 ** 
-occupationUnemployed                                    1.378 0.168101    
-religionMuslims                                        -3.348 0.000813 ***
-religionNot religious                                   6.849 7.45e-12 ***
-religionOrthodox Chrsitian                              0.594 0.552231    
-religionOther religions                                -1.961 0.049877 *  
-scale(religiosity_percent)                             -2.488 0.012837 *  
-personal_satisSatisfied                                 7.640 2.18e-14 ***
-contact_lgbtiContact                                   21.269  < 2e-16 ***
-scale(rain_ind)                                         1.869 0.061636 .  
-self_determination1                                     2.069 0.038553 *  
-scale(ideology)                                        -6.307 2.84e-10 ***
-scale(gdp_pc)                                           1.775 0.075897 .  
-religionMuslims:scale(religiosity_percent)             -0.727 0.467438    
-religionNot religious:scale(religiosity_percent)        2.334 0.019613 *  
-religionOrthodox Chrsitian:scale(religiosity_percent)   3.657 0.000255 ***
-religionOther religions:scale(religiosity_percent)     -3.368 0.000757 ***
-contact_lgbtiContact:scale(rain_ind)                    1.641 0.100752    
-scale(ideology):scale(gdp_pc)                          -3.354 0.000796 ***
----
-Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
-
-Correlation matrix not shown by default, as p = 25 > 12.
-Use print(x, correlation=TRUE)  or
-    vcov(x)        if you need it
-
-optimizer (bobyqa) convergence code: 0 (OK)
-boundary (singular) fit: see help('isSingular')
-
-```
-
-confusionMatrix:
-
-``` 
-> confusionMatrix(prediction2, test2$trans_name)$table
-          Reference
-Prediction    0    1
-         0 1687  833
-         1 1202 3494
-         
-> confusionMatrix(prediction2, test2$trans_name)$overall[1:2]
- Accuracy     Kappa 
-0.7179878 0.3999146 
-
-```
-
-
-finlandia 
+From now on, we will do not have Finland in the training set.
 
 ```{r}
-# limpio -------------------------------------------
-# separate Finland as our test country 
-test_no_fi <- data |> 
-  filter(isocntry != "FI")
+# Separate Finland as our test country 
+data$serialid <- serialid 
+
+no_fi <- data |> 
+  filter(isocntry != "FI") |> 
+  mutate(trans_doc = case_when(
+    trans_doc == "1" ~ "Yes",
+    trans_doc == "0" ~ "No",
+    TRUE ~ NA
+  ))
 
 test_country_fi <- data |> 
-  filter(isocntry == "FI")
+  filter(isocntry == "FI")|> 
+  mutate(trans_doc = case_when(
+    trans_doc == "1" ~ "Yes",
+    trans_doc == "0" ~ "No",
+    TRUE ~ NA
+  ))
 
 # training and testing set 
-training <- test_no_fi %>%
+training2 <- no_fi %>%
   group_by(isocntry) %>%
   sample_frac(0.7) %>%
   ungroup()
 
-testing <- test_no_fi %>%
-  anti_join(training, by = c("serialid")) %>% 
-  # we insert Finland to have a new country that the model hadnt previously seen 
-  bind_rows(test_country_fi) 
+test_no_fi <- no_fi %>%
+  anti_join(training2, by = c("serialid"))  
+
+testing2 <- test_no_fi |> 
+  bind_rows(test_country_fi)
 
 # remove serialid from the model dataset
-training <- training %>%
-  select(-serialid)
+training2 <- training2 %>%
+  select(-c(serialid, isocntry))
 
-testing <- testing  %>%
-  select(-serialid) 
+testing2 <- testing2  %>%
+  select(-c(serialid, isocntry)) 
 
+test_country_fi <- test_country_fi |> 
+  select(-c(serialid, isocntry)) 
 
-# sucio -------------------------------------------
-# Logistic prediction (no va)
-
-set.seed(123)
-
-wofi <- imputed_data_final_2 |> 
-  filter(isocntry != "FI")
-
-test_country <-imputed_data_final_2 |> 
-  filter(isocntry == "FI")
-
-train_set <- wofi %>%
-  group_by(isocntry) %>%
-  sample_frac(0.7) %>%
-  ungroup()
-
-test_set <- anti_join(wofi, train_set, by = c("serialid")) 
-
-testing <- bind_rows(test_set, test_country)
-
-train_set <- train_set |> 
-  select(trans_name:religiosity_percent, isocntry)
-
-test_set <- test_set |> 
-  select(trans_name:religiosity_percent, isocntry)
 ```
 
+```{r}
+training2 <- training2[complete.cases(training2), ]
+testing2 <- testing2[complete.cases(testing2), ]
+test_no_fi <- test_no_fi[complete.cases(test_no_fi), ]
+test_country_fi <- test_country_fi[complete.cases(test_country_fi), ]
+```
+
+```{r}
+training2$trans_doc <- as.factor(training2$trans_doc)
+
+training2 <- as.data.frame(training2)
+
+control <- rpart.control(minsplit = 30, maxdepth = 10, cp=0.01)
+
+model <- trans_doc ~ .
+dtFit <- rpart(model, data=training2, method = "class", control = control)
+summary(dtFit)
+
+
+rpart.plot(dtFit, digits=3)
+
+dtPred <- predict(dtFit, testing2, type = "class")
+
+dtProb <- predict(dtFit, testing2, type = "prob")
+
+prediction <- as.factor(ifelse(dtProb[,2] > 0.5, "Yes", "No"))
+
+testing2$trans_doc <- factor(testing2$trans_doc)
+
+confusionMatrix(prediction, testing2$trans_doc)$table
+confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
+
+caret.fit <- train(model, 
+                   data = training2, 
+                   method = "rpart",
+                   control=rpart.control(minsplit = 8, maxdepth = 12),
+                   trControl = ctrl,
+                   tuneLength=10)
+caret.fit
+
+rpart.plot(caret.fit$finalModel)
+
+dtProb <- predict(caret.fit, testing2, type = "prob")
+
+prediction <- as.factor(ifelse(dtProb[,2] > 0.5, "Yes", "No"))
+
+confusionMatrix(prediction, testing2$trans_doc)$table
+confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
+
+```
+
+## Random Forest 
+
+```{r}
+rfFit <- train(trans_doc ~ ., 
+               data = training2,
+               method = "rf",   
+               preProc=c('scale','center'),
+               tuneLength = 10,
+               metric="ROC",
+               trControl = ctrl)
+
+plot(rfFit)
+
+rfProb <- predict(rfFit, testing2, type="prob")
+prediction <- as.factor(ifelse(rfProb[,2] > 0.5, "Yes", "No"))
+
+confusionMatrix(prediction, testing2$trans_doc)$table
+confusionMatrix(prediction, testing2$trans_doc)$overall[1:2]
+
+```
 
 
 # Conclusions
