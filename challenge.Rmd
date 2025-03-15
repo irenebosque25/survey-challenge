@@ -36,6 +36,7 @@ library(RColorBrewer)
 library(caret)
 library(rpart)
 library(rpart.plot)
+library(stargazer)
 ```
 
 # Data cleaning
@@ -1248,7 +1249,7 @@ confusionMatrix(prediction, testing$trans_doc)$overall[1:2]
 
 ```
 
-We obtain a pretty good accuracy.
+We obtain a pretty good accuracy of more than the 70%.
 
 # K-NN
 
@@ -1670,7 +1671,10 @@ ggplot(summary_occupation, aes(x = isocntry, y = percentage, fill = occupation))
     plot.margin = margin(15, 15, 15, 15),
     legend.key.size = unit(1, "lines")
   )
+```
 
+
+```{r}
 ggplot(summary_religion, aes(x = isocntry, y = percentage, fill = religion)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   labs(title = "Distribution of religion by country",
@@ -1688,7 +1692,10 @@ ggplot(summary_religion, aes(x = isocntry, y = percentage, fill = religion)) +
     legend.box.background = element_rect(color = "black", size = 0.5),
     plot.margin = margin(15, 15, 15, 15),
     legend.key.size = unit(1, "lines"))
-  
+```
+
+
+```{r}
 
 ggplot(summary_satisfaction, aes(x = isocntry, y = percentage, fill = personal_satis)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
@@ -1713,6 +1720,9 @@ ggplot(summary_satisfaction, aes(x = isocntry, y = percentage, fill = personal_s
     legend.key.size = unit(1, "lines"))
 
 
+```
+
+```{r}
 ggplot(summary_contact_lgtbi, aes(x = isocntry, y = percentage, fill = contact_lgbti)) +
   geom_bar(stat = "identity", position = "fill", color = "black") +
   labs(title = "Distribution of Contact LGBTI by country",
