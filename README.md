@@ -7,11 +7,11 @@ Date: March 14, 2025
 ### Project Objectives
 This project addresses two main goals:
 
-- Explaining Cross-Country Differences in Support for Transgender Rights:
+- **Explaining Cross-Country Differences in Support for Transgender Rights:**
   
 We analyze data from the Eurobarometer 493 to explain why support for transgender individuals obtaining official identity documents varies across countries. The analysis combines individual-level indicators with country-level factors, such as legal protections, cultural values, economic indicators, and social attitudes (sourced from Eurostat, FRA, ILGA-Europe, etc.).
 
-- Building a Predictive Model for Other Countries:
+- **Building a Predictive Model for Other Countries:**
   
 Using the insights from the first part, we apply machine learning techniques (logistic regression, decision trees, etc.) to develop a model that predicts support levels in other contexts or countries not included in the original survey. We rigorously calibrate and validate the model to ensure reliability.
 
@@ -26,15 +26,18 @@ Sourced from Eurostat, ILGA-Europe, and similar databases. Includes variables li
 
 ### Methodology
 **Data Preprocessing and Missing Data**
+
 We used Multiple Imputation by Chained Equations (MICE) to handle missing data across key variables. This approach helps ensure robustness and reduces bias in the multivariate models.
 
 **Part 1: Multilevel Analysis**
+
 We use multilevel logistic regression to assess support for the question QC19:
 _“Transgender people should be allowed to change their official documents to reflect their gender identity.”_
 
 Includes individual fixed effects and country-level random effects.
 
 **Part 2: Predictive Modeling**
+
 We compare different models (logistic regression, random forests, etc.).
 Calibration and validation are conducted using cross-validation and metrics such as AUC and accuracy.
 The final model enables us to predict support levels in other or future contexts.
