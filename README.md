@@ -16,11 +16,11 @@ We analyze data from the Eurobarometer 493 to explain why support for transgende
 Using the insights from the first part, we apply machine learning techniques (logistic regression, decision trees, etc.) to develop a model that predicts support levels in other contexts or countries not included in the original survey. We rigorously calibrate and validate the model to ensure reliability.
 
 ### Data Sources
-- Special Eurobarometer 493 (2019)
+- **Special Eurobarometer 493 (2019)**
   
 A survey across 28 EU countries measuring perceptions of discrimination, including sexual orientation and gender identity.
 
-- Country-Level Indicators
+- **Country-Level Indicators**
   
 Sourced from Eurostat, ILGA-Europe, and similar databases. Includes variables like legal protection scores, LGBTI acceptance indices, GDP, and inequality metrics.
 
